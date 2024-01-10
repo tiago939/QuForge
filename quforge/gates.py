@@ -41,7 +41,7 @@ def State(dits, state=None, device='cpu'):
 
 
 def density_matrix(state):
-    rho = torch.matmul(state, state.T)
+    rho = torch.matmul(state, torch.conj(state).T)
     return rho
 
 
@@ -68,8 +68,9 @@ def partial_trace(state, index):
         for i in p:
             if i == 'h':
                 u = torch.kron(u, torch.eye(D, dtype=torch.complex64, device=state.device))
+                uT = torch.kron(u, torch.eye(D, dtype=torch.complex64, device=state.device))
             else:
-                u = torch.kron(u, State(dits=str(i)))
+                u = torch.kron(u, State(dits=str(i)).to(state.device))
         U += torch.matmul(u.T, torch.matmul(rho, u))
     
     return U
@@ -126,8 +127,7 @@ def project(state, index=[0]):
     state = torch.matmul(U, state)
     state = state/(torch.sum(abs(state)**2)**0.5)
     
-    print(L)
-    return state, L
+    return state
 
 
 def mean(state, observable='Z', index=0):
