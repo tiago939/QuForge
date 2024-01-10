@@ -103,6 +103,31 @@ def measure(state=None, index=[0], shots=1):
         histogram[keys[position]] += 1
 
     return histogram
+        
+
+def project(state, index=[0]):
+    p = [(abs(state[i])**2).item() for i in range(len(state))]
+    p = p/np.sum(p)
+
+    a = np.array(range(len(state)))
+    position = np.random.choice(a, p=p, size=1)[0]
+
+    L = list(itertools.product(range(D), repeat=int(log(state.shape[0], D))))[position]
+    U = torch.eye(1, device=state.device)
+    counter = 0
+    size = int(log(state.shape[0], D))
+    for i in range(size):
+        if i not in index:
+            U = torch.kron(U, torch.eye(D, device=state.device))
+        else:
+            U = torch.kron(U, projector(L[i]).to(state.device))
+            counter += 1
+
+    state = torch.matmul(U, state)
+    state = state/(torch.sum(abs(state)**2)**0.5)
+    
+    print(L)
+    return state, L
 
 
 def mean(state, observable='Z', index=0):
@@ -120,30 +145,6 @@ def mean(state, observable='Z', index=0):
     output = torch.matmul(state.T, U(state))[0][0]
 
     return output
-        
-
-def project(state, index=[0]):
-    p = [(abs(state[i])**2).item() for i in range(len(state))]
-    p = p/np.sum(p)
-
-    a = np.array(range(len(state)))
-    position = np.random.choice(a, p=p, size=1)[0]
-
-    L = list(itertools.product(range(D), repeat=int(log(state.shape[0], D))))[position]
-    U = torch.eye(1)
-    counter = 0
-    size = int(log(state.shape[0], D))
-    for i in range(size):
-        if i not in index:
-            U = torch.kron(U, torch.eye(D))
-        else:
-            U = torch.kron(U, projector(L[i]))
-            counter += 1
-
-    state = torch.matmul(U, state)
-    state = state/(torch.sum(abs(state)**2)**0.5)
-    
-    return state, L
 
 
 def Sx(j, k):
