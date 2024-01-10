@@ -84,12 +84,19 @@ def projector(index):
 
 
 def measure(state=None, index=[0], shots=1):
+    #input:
+        #state: state to measure
+        #index: list of qudits to measure
+        #shots: number of measurements
+    #output:
+        #histogram: histogram of the measurements
+        #p: distribution probability
     rho = partial_trace(state, index)
-    p = [abs(rho[i][i]).item() for i in range(len(rho))]
-    p = p/np.sum(p)
+    p = abs(torch.diag(rho))
+    p = p/torch.sum(p)
 
     a = np.array(range(len(rho)))
-    positions = np.random.choice(a, p=p, size=shots)
+    positions = np.random.choice(a, p=p.detach().cpu().numpy(), size=shots)
 
     L = list(itertools.product(range(D), repeat=len(index)))
     histogram = dict()
@@ -103,7 +110,7 @@ def measure(state=None, index=[0], shots=1):
     for position in positions:
         histogram[keys[position]] += 1
 
-    return histogram
+    return histogram, p
         
 
 def project(state, index=[0]):

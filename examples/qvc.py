@@ -41,7 +41,8 @@ entrada = entrada.to(device)
 for epochs in range(1):
 
     saida = model(entrada, 0.5)
-    m = ops.measure(saida, index=[0])
+    m, p = ops.measure(saida, index=[0])
+    print(p)
 
     mean = ops.mean(saida, 'Z', index=0)
     
