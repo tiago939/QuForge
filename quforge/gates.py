@@ -107,37 +107,20 @@ def measure(state=None, index=[0], shots=1):
 
 def mean(state, observable='Z', index=0):
 
-    if observable == 'Z':
-        U = ZGate(index=0, device=state.device)
+    if isinstance(observable, str):
+        if observable == 'Z':
+            U = ZGate(index=0, device=state.device)
+    elif isinstance(observable, np.ndarray):
+        M = torch.tensor(observable).to(state.device)
+        U = CustomGate(M, index)
+    else:
+        M = observable.to(state.device)
+        U = CustomGate(M, index)
 
     output = torch.matmul(state.T, U(state))[0][0]
 
     return output
         
-
-# def project(state, index=[0]):
-#     rho = partial_trace(state, index)
-#     p = [abs(rho[i][i]).item() for i in range(len(rho))]
-#     p = p/np.sum(p)
-
-#     a = np.array(range(len(rho)))
-#     position = np.random.choice(a, p=p, size=1)[0]
-
-#     L = list(itertools.product(range(D), repeat=len(index)))[position]
-#     U = torch.eye(1)
-#     counter = 0
-#     size = int(log(state.shape[0], D))
-#     for i in range(size):
-#         if i not in index:
-#             U = torch.kron(U, torch.eye(D))
-#         else:
-#             U = torch.kron(U, projector(L[counter]))
-#             counter += 1
-
-#     state = torch.matmul(U, state)
-#     state = state/(torch.sum(abs(state)**2)**0.5)
-    
-#     return state, L
 
 def project(state, index=[0]):
     p = [(abs(state[i])**2).item() for i in range(len(state))]
@@ -173,6 +156,24 @@ def Sz(j, k):
     return torch.kron(base[j], base[j].T) - torch.kron(base[k], base[k].T) + 0*1j
 
 sigma = [Sx, Sy, Sz]
+
+class CustomGate(nn.Module):
+    def __init__(self, M, index=0):
+        super(CustomGate, self).__init__()
+        self.M = M.type(torch.complex64)
+        self.index = index
+
+    def forward(self, x):
+        L = int(log(x.shape[0], D))
+        U = torch.eye(1, dtype=torch.complex64, device=x.device)
+        for i in range(L):
+            if i == self.index:
+                U = torch.kron(U, self.M)
+            else:
+                U = torch.kron(U, torch.eye(D, dtype=torch.complex64, device=x.device))
+        
+        return torch.matmul(U, x)
+
 
 class Rotation(nn.Module):
     #mtx_id: 0:Sx, 1:Sy, 2:Sz
