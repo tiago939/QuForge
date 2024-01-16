@@ -12,20 +12,16 @@ class Circuit(nn.Module):
     def __init__(self):
         super(Circuit, self).__init__()
 
-        self.H1 = ops.Hadamard(index=0)
-        self.H2 = ops.Hadamard(index=1)
-        self.RX1 = ops.Rotation(mtx_id=0, j=0, k=1, index=0)
-        self.RX2 = ops.Rotation(mtx_id=0, j=0, k=1, index=1)
+        self.H = ops.Hadamard(index=[0, 1])
+        self.RX = ops.Rotation(mtx_id=0, j=0, k=1, index=[0,1])
         self.cnot = ops.CNOT(control=0, target=2, N=3)
 
     def forward(self, x, angle):
 
         R = ops.Rotation(mtx_id=0, j=0, k=1, angle=angle)
 
-        x = self.H1(x)
-        x = self.H2(x)
-        x = self.RX1(x)
-        x = self.RX2(x)
+        x = self.H(x)
+        x = self.RX(x)
         x = self.cnot(x)
 
         return x 
@@ -33,6 +29,7 @@ class Circuit(nn.Module):
 device='cuda'
 
 model = Circuit().to(device)
+
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 entrada = (State('000') + State('111'))/(2**0.5)
@@ -51,7 +48,7 @@ for epochs in range(1):
 
     optimizer.zero_grad()
     loss.backward()
-    print(model.RX1.angle.grad)
+    print(model.RX.angle.grad)
     optimizer.step()
 
 

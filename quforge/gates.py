@@ -187,25 +187,27 @@ class Rotation(nn.Module):
     #mtx_id: 0:Sx, 1:Sy, 2:Sz
     #j,k: indexes of the Gell-Mann matrices
     #index: index of the qudit to apply the gate
-    def __init__(self, mtx_id=0, j=0, k=1, index=0, angle=False):
+    def __init__(self, mtx_id=0, j=0, k=1, index=[0], angle=False):
         super(Rotation, self).__init__()
 
         self.mtx_id = mtx_id
         self.j = j
         self.k = k
         if angle is False:
-            self.angle = nn.Parameter(4*pi*torch.rand(1))
+            self.angle = nn.Parameter(4*pi*torch.rand(len(index)))
         else:
             self.angle = angle
         self.index = index
 
+        S = sigma[self.mtx_id](self.j, self.k)
+        self.register_buffer('S', S)
+
     def forward(self, x):
-        S = sigma[self.mtx_id](self.j, self.k).to(x.device)
         L = int(log(x.shape[0], D))
-        M = torch.matrix_exp(-0.5*1j*self.angle*S)
         U = torch.eye(1, device=x.device)
         for i in range(L):
-            if i == self.index:
+            if i in self.index:
+                M = torch.matrix_exp(-0.5*1j*self.angle[i]*self.S)
                 U = torch.kron(U, M)
             else:
                 U = torch.kron(U, torch.eye(D, device=x.device))
@@ -215,25 +217,25 @@ class Rotation(nn.Module):
 
 class Hadamard(nn.Module):
     #index: index of the qudit to apply the gate
-    def __init__(self, index=0, inverse=False):
+    def __init__(self, index=[0], inverse=False):
         super(Hadamard, self).__init__()
 
         self.index = index
 
-        self.M = torch.ones((D, D), dtype=torch.complex64)
+        M = torch.ones((D, D), dtype=torch.complex64)
         for i in range(1, D):
             for j in range(1, D):
-                self.M[i, j] = omega**(j*i)
-        self.M = self.M/(D**0.5)
+                M[i, j] = omega**(j*i)
+        M = M/(D**0.5)
         if inverse:
-            self.M = torch.conj(self.M).T.contiguous()
-        self.M = nn.Parameter(self.M).requires_grad_(False)
+            M = torch.conj(self.M).T.contiguous()
+        self.register_buffer('M', M)
 
     def forward(self, x):
         L = int(log(x.shape[0], D))
         U = torch.eye(1, device=x.device)
         for i in range(L):
-            if i == self.index:
+            if i in self.index:
                 U = torch.kron(U, self.M)
             else:
                 U = torch.kron(U, torch.eye(D, device=x.device))
