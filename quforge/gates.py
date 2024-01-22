@@ -4,7 +4,7 @@ import numpy as np
 from math import log as log
 import itertools
 
-D = 3
+D = 11
 
 pi = np.pi
 omega = np.exp(2*1j*pi/D)
@@ -19,25 +19,21 @@ def delta(x,y):
     else:
         return 0.0
 
+
 def State(dits, state=None, device='cpu'):
-    s = torch.eye(1, dtype=torch.complex64)
-    if state is None and dits is None:
-        for dit in dits:
-            s = torch.kron(s, base[0])
-
-    elif state is None and type(dits) == str:
-        for dit in dits:
-            s = torch.kron(s, base[int(dit)])
-
-    else:
-        for dit in dits:
-            if dit == 'h':
-                s = torch.kron(s, state)
-            else:
-                s = torch.kron(s, base[int(dit)])
-
-    s = s.to(device)
-    return s
+    state = torch.eye(1, dtype=torch.complex64, device=device)
+    st = ''
+    for i in range(len(dits)):
+        s = dits[i]
+        if s.isdigit() is False: 
+            state = torch.kron(state, base[int(st)])
+            st = ''
+        elif i == len(dits)-1:
+            st += s
+            state = torch.kron(state, base[int(st)])
+        else:
+            st += s
+    return state
 
 
 def density_matrix(state):
@@ -48,7 +44,7 @@ def density_matrix(state):
 def partial_trace(state, index):
     #index: list of qudits to take the partial trace over
     rho = density_matrix(state)
-    N = int(log(state.shape[0], D))
+    N = round(log(state.shape[0], D))
     L = list(itertools.product(range(D), repeat=N-len(index)))
     P = []
     for l in L:
@@ -172,7 +168,7 @@ class CustomGate(nn.Module):
         self.index = index
 
     def forward(self, x):
-        L = int(log(x.shape[0], D))
+        L = round(log(x.shape[0], D))
         U = torch.eye(1, dtype=torch.complex64, device=x.device)
         for i in range(L):
             if i == self.index:
@@ -203,7 +199,7 @@ class Rotation(nn.Module):
         self.register_buffer('S', S)
 
     def forward(self, x):
-        L = int(log(x.shape[0], D))
+        L = round(log(x.shape[0], D))
         U = torch.eye(1, device=x.device)
         for i in range(L):
             if i in self.index:
@@ -232,14 +228,14 @@ class Hadamard(nn.Module):
         self.register_buffer('M', M)
 
     def forward(self, x):
-        L = int(log(x.shape[0], D))
+        L = round(log(x.shape[0], D))
         U = torch.eye(1, device=x.device)
         for i in range(L):
             if i in self.index:
                 U = torch.kron(U, self.M)
             else:
                 U = torch.kron(U, torch.eye(D, device=x.device))
-        
+
         return torch.matmul(U, x)
 
 
@@ -256,7 +252,7 @@ class XGate(nn.Module):
         self.M = nn.Parameter(self.M).requires_grad_(False)
         
     def forward(self, x):
-        L = int(log(x.shape[0], D))
+        L = round(log(x.shape[0], D))
         U = torch.eye(1, device=x.device)
         for i in range(L):
             if i == self.index:
@@ -280,7 +276,7 @@ class ZGate(nn.Module):
         self.M = nn.Parameter(self.M).requires_grad_(False)
         
     def forward(self, x):
-        L = int(log(x.shape[0], D))
+        L = round(log(x.shape[0], D))
         U = torch.eye(1, device=x.device)
         for i in range(L):
             if i == self.index:
@@ -300,22 +296,30 @@ class CNOT(nn.Module):
 
         self.U = torch.zeros((D**N, D**N), dtype=torch.complex64)
         L = list(itertools.product(range(D), repeat=N))
-        for l1 in L:
-            i = int(''.join([str(k) for k in l1]), D)
+        #for l1 in L:
+        for i in range(D**N):
+            #i = int(''.join([str(k) for k in l1]), D)
+            l1 = L[i]
             l1n = list(l1)
             bra = torch.eye(1)
             for k in l1n:
                 bra = torch.kron(bra, base[k])
-            bra = bra.T
+            bra = bra.T.contiguous()
 
-            for l2 in L:
-                j = int(''.join([str(k) for k in l2]), D)
+            #for l2 in L:
+            for j in range(D**N):
+                #j = int(''.join([str(k) for k in l2]), D)
+                l2 = L[j]
                 l2n = list(l2)
                 l2n[target] = (l2n[control] + l2n[target]) % D
                 ket = torch.eye(1)
                 for k in l2n:
                     ket = torch.kron(ket, base[k])
+                ket = ket.contiguous()
+                m1 = torch.zeros((bra.shape))
+                m2 = torch.zeros((ket.shape))
                 self.U[i][j] = torch.matmul(bra, ket)
+
         if inverse:
             self.U = torch.conj(self.U).T.contiguous()
         self.U = nn.Parameter(self.U).requires_grad_(False)

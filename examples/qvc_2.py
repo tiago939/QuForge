@@ -8,13 +8,14 @@ sys.path.append('../')
 from quforge import gates as ops
 from quforge.gates import State as State
 
+
 class Circuit(nn.Module):
     def __init__(self):
         super(Circuit, self).__init__()
 
         self.layers = nn.Sequential(
-            ops.Hadamard(index=[0,1]),
-            ops.Rotation(mtx_id=0, j=0, k=1, index=[0,1]),
+            ops.Hadamard(index=[0, 1]),
+            ops.Rotation(mtx_id=0, j=0, k=1, index=[0, 1]),
             ops.CNOT(control=0, target=2, N=3)
         )
 
@@ -22,7 +23,7 @@ class Circuit(nn.Module):
 
         x = self.layers(x)
 
-        return x 
+        return x
 
 device='cuda'
 
@@ -30,7 +31,7 @@ model = Circuit().to(device)
 
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-entrada = (State('000') + State('111'))/(2**0.5)
+entrada = (State('0-0-0') + State('1-1-1'))/(2**0.5)
 entrada = entrada.to(device)
 
 for epochs in range(1):
