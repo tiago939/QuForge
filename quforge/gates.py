@@ -4,7 +4,7 @@ import numpy as np
 from math import log as log
 import itertools
 
-D = 11
+D = 3
 
 pi = np.pi
 omega = np.exp(2*1j*pi/D)
@@ -294,37 +294,17 @@ class CNOT(nn.Module):
     def __init__(self, control=0, target=1, N=2, inverse=False):
         super(CNOT, self).__init__()
 
-        self.U = torch.zeros((D**N, D**N), dtype=torch.complex64)
-        L = list(itertools.product(range(D), repeat=N))
-        #for l1 in L:
-        for i in range(D**N):
-            #i = int(''.join([str(k) for k in l1]), D)
-            l1 = L[i]
-            l1n = list(l1)
-            bra = torch.eye(1)
-            for k in l1n:
-                bra = torch.kron(bra, base[k])
-            bra = bra.T.contiguous()
-
-            #for l2 in L:
-            for j in range(D**N):
-                #j = int(''.join([str(k) for k in l2]), D)
-                l2 = L[j]
-                l2n = list(l2)
-                l2n[target] = (l2n[control] + l2n[target]) % D
-                ket = torch.eye(1)
-                for k in l2n:
-                    ket = torch.kron(ket, base[k])
-                ket = ket.contiguous()
-                m1 = torch.zeros((bra.shape))
-                m2 = torch.zeros((ket.shape))
-                self.U[i][j] = torch.matmul(bra, ket)
+        U = torch.zeros((D**N, D**N), dtype=torch.complex64)
+        L = itertools.product(range(D), repeat=N)
+        L = [np.array(list(l)) for l in L]
+        l2ns = np.array([L[k] for k in range(D**N)])
+        l2ns[:,target] = (l2ns[:,control] + l2ns[:,target]) % D
+        U = torch.tensor([[1.0+0*1j if list(L[i]) == list(l2ns[j]) else 0.0 for j in range(D**N)] for i in range(D**N)])
 
         if inverse:
-            self.U = torch.conj(self.U).T.contiguous()
-        self.U = nn.Parameter(self.U).requires_grad_(False)
+            U = torch.conj(self.U).T.contiguous()
+        self.register_buffer('U', U)
 
     def forward(self, x):
             
         return torch.matmul(self.U, x)
-

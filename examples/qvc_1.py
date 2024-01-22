@@ -32,7 +32,7 @@ model = Circuit().to(device)
 
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-entrada = State('0-0')
+entrada = State('0-0-0')
 entrada = entrada.to(device)
 print(entrada)
 
