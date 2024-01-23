@@ -4,7 +4,7 @@ import numpy as np
 from math import log as log
 import itertools
 
-D = 3
+D = 20
 
 pi = np.pi
 omega = np.exp(2*1j*pi/D)
@@ -292,19 +292,38 @@ class CNOT(nn.Module):
     #target: target qudit
     #N: number of qudits
     def __init__(self, control=0, target=1, N=2, inverse=False):
-        super(CNOT, self).__init__()
-
-        U = torch.zeros((D**N, D**N), dtype=torch.complex64)
-        L = itertools.product(range(D), repeat=N)
-        L = [np.array(list(l)) for l in L]
-        l2ns = np.array([L[k] for k in range(D**N)])
-        l2ns[:,target] = (l2ns[:,control] + l2ns[:,target]) % D
-        U = torch.tensor([[1.0+0*1j if list(L[i]) == list(l2ns[j]) else 0.0 for j in range(D**N)] for i in range(D**N)])
-
+        super(CNOT, self).__init__()        
+        L = torch.tensor(list(itertools.product(range(D), repeat=N)))
+        l2ns = L.clone()
+        l2ns[:, target] = (l2ns[:, control] + l2ns[:, target]) % D
+        indices = torch.all(L[:, None, :] == l2ns[None, :, :], dim=2)
+        U = torch.where(indices, torch.tensor([1.0 + 0j], dtype=torch.complex64), torch.tensor([0.0], dtype=torch.complex64))        
         if inverse:
             U = torch.conj(self.U).T.contiguous()
-        self.register_buffer('U', U)
-
+        self.register_buffer('U', U)    
+        
     def forward(self, x):
-            
         return torch.matmul(self.U, x)
+
+        
+# class CNOT(nn.Module):
+#     #control: control qudit
+#     #target: target qudit
+#     #N: number of qudits
+#     def __init__(self, control=0, target=1, N=2, inverse=False):
+#         super(CNOT, self).__init__()
+
+#         U = torch.zeros((D**N, D**N), dtype=torch.complex64)
+#         L = itertools.product(range(D), repeat=N)
+#         L = [np.array(list(l)) for l in L]
+#         l2ns = np.array([L[k] for k in range(D**N)])
+#         l2ns[:,target] = (l2ns[:,control] + l2ns[:,target]) % D
+#         U = torch.tensor([[1.0+0*1j if list(L[i]) == list(l2ns[j]) else 0.0 for j in range(D**N)] for i in range(D**N)])
+
+#         if inverse:
+#             U = torch.conj(self.U).T.contiguous()
+#         self.register_buffer('U', U)
+
+#     def forward(self, x):
+            
+#         return torch.matmul(self.U, x)

@@ -10,7 +10,7 @@ from quforge import gates as ops
 from quforge.gates import State as State
 
 
-device='cpu'
+device='cuda'
 
 x = State('0-0-0').to(device)
 
