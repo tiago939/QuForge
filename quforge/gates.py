@@ -4,7 +4,7 @@ import numpy as np
 from math import log as log
 import itertools
 
-D = 20
+D = 3
 
 pi = np.pi
 omega = np.exp(2*1j*pi/D)
@@ -64,7 +64,6 @@ def partial_trace(state, index):
         for i in p:
             if i == 'h':
                 u = torch.kron(u, torch.eye(D, dtype=torch.complex64, device=state.device))
-                uT = torch.kron(u, torch.eye(D, dtype=torch.complex64, device=state.device))
             else:
                 u = torch.kron(u, State(dits=str(i)).to(state.device))
         U += torch.matmul(u.T, torch.matmul(rho, u))
@@ -241,15 +240,15 @@ class Hadamard(nn.Module):
 
 class XGate(nn.Module):
     #index: index of the qudit to apply the gate
-    def __init__(self, s=1, index=0):
+    def __init__(self, s=1, index=0, device='cpu'):
         super(XGate, self).__init__()
 
         self.index = index
-        self.M = torch.zeros((D, D), dtype=torch.complex64)
+        M = torch.zeros((D, D), dtype=torch.complex64)
         for i in range(D):
             for j in range(D):
-                self.M[j][i] = torch.matmul(base[j].T, base[(i+s) % D])
-        self.M = nn.Parameter(self.M).requires_grad_(False)
+                M[j][i] = torch.matmul(base[j].T, base[(i+s) % D])
+        self.register_buffer('M', M)   
         
     def forward(self, x):
         L = round(log(x.shape[0], D))
@@ -259,7 +258,6 @@ class XGate(nn.Module):
                 U = torch.kron(U, self.M)
             else:
                 U = torch.kron(U, torch.eye(D, device=x.device))
-
         return torch.matmul(U, x)
 
 
@@ -269,11 +267,11 @@ class ZGate(nn.Module):
         super(ZGate, self).__init__()
 
         self.index = index
-        self.M = torch.zeros((D, D), dtype=torch.complex64, device=device)
+        M = torch.zeros((D, D), dtype=torch.complex64, device=device)
         for i in range(D):
             for j in range(D):
-                self.M[j][i] = (omega**(j*s))*delta(i,j)
-        self.M = nn.Parameter(self.M).requires_grad_(False)
+                M[j][i] = (omega**(j*s))*delta(i,j)
+        self.register_buffer('M', M)   
         
     def forward(self, x):
         L = round(log(x.shape[0], D))
@@ -284,6 +282,63 @@ class ZGate(nn.Module):
             else:
                 U = torch.kron(U, torch.eye(D, device=x.device))
         
+        return torch.matmul(U, x)
+
+
+class YGate(nn.Module):
+    #index: index of the qudit to apply the gate
+    def __init__(self, s=1, index=0, device='cpu'):
+        super(YGate, self).__init__()
+
+        self.index = index
+        X = XGate(s=s, device=device).M
+        Z = ZGate(device=device).M
+        M = torch.matmul(Z, X)/1j
+        self.register_buffer('M', M) 
+        
+    def forward(self, x):
+        L = round(log(x.shape[0], D))
+        U = torch.eye(1, device=x.device)
+        for i in range(L):
+            if i == self.index:
+                U = torch.kron(U, self.M)
+            else:
+                U = torch.kron(U, torch.eye(D, device=x.device))
+        
+        return torch.matmul(U, x)
+
+
+class XdGate(nn.Module):
+    #index: index of the qudit to apply the gate
+    def __init__(self, index=0, device='cpu'):
+        super(XdGate, self).__init__()
+
+        self.index = index
+        M = torch.zeros((D, D), dtype=torch.complex64)
+        for i in range(D):
+            for j in range(D):
+                M[j][i] = torch.matmul(base[j].T, base[(D-i) % D])
+        self.register_buffer('M', M)   
+        
+    def forward(self, x):
+        L = round(log(x.shape[0], D))
+        U = torch.eye(1, device=x.device)
+        for i in range(L):
+            if i == self.index:
+                U = torch.kron(U, self.M)
+            else:
+                U = torch.kron(U, torch.eye(D, device=x.device))
+        return torch.matmul(U, x)
+
+
+class Identity(nn.Module):
+    #index: index of the qudit to apply the gate
+    def __init__(self, N=1, device='cpu'):
+        super(Identity, self).__init__()
+
+        self.U = torch.eye(D**N, dytpe=torch.complex64, device=device)
+        
+    def forward(self, x):
         return torch.matmul(U, x)
 
 
@@ -299,31 +354,50 @@ class CNOT(nn.Module):
         indices = torch.all(L[:, None, :] == l2ns[None, :, :], dim=2)
         U = torch.where(indices, torch.tensor([1.0 + 0j], dtype=torch.complex64), torch.tensor([0.0], dtype=torch.complex64))        
         if inverse:
-            U = torch.conj(self.U).T.contiguous()
+            U = torch.conj(U).T.contiguous()
         self.register_buffer('U', U)    
         
     def forward(self, x):
         return torch.matmul(self.U, x)
 
+
+class SWAP(nn.Module):
+    #swap the state of two qudits
+    def __init__(self, qudit1=0, qudit2=1, N=2):
+        super(SWAP, self).__init__()
+
+        self.U1 = CNOT(control=qudit1, target=qudit2, N=N)
+        self.U2 = CNOT(control=qudit2, target=qudit1, N=N)
+        self.U3 = XdGate(index=qudit1)
+        self.U4 = XdGate(index=qudit2)
+
+    def forward(self, x):
+        x = self.U4(x)
+        x = self.U1(x)
+        x = self.U3(x)
+        x = self.U2(x)
+        x = self.U3(x)
+        x = self.U1(x)
+
+        return x
+
+
+class CCNOT(nn.Module):
+    #Toffoli gate, also know as CCNOT
+    #control_1: control of qudit 1
+    #control_2: control of qudit 2
+    #target: target of qudit 3
+    #N: number of qudits
+    def __init__(self, control_1=0, control_2=1, target=2, N=3, inverse=False):
+        super(CCNOT, self).__init__()        
+        L = torch.tensor(list(itertools.product(range(D), repeat=N)))
+        l2ns = L.clone()
+        l2ns[:, target] = (l2ns[:, control_1]*l2ns[:, control_2] + l2ns[:, target]) % D
+        indices = torch.all(L[:, None, :] == l2ns[None, :, :], dim=2)
+        U = torch.where(indices, torch.tensor([1.0 + 0j], dtype=torch.complex64), torch.tensor([0.0], dtype=torch.complex64))        
+        if inverse:
+            U = torch.conj(U).T.contiguous()
+        self.register_buffer('U', U)
         
-# class CNOT(nn.Module):
-#     #control: control qudit
-#     #target: target qudit
-#     #N: number of qudits
-#     def __init__(self, control=0, target=1, N=2, inverse=False):
-#         super(CNOT, self).__init__()
-
-#         U = torch.zeros((D**N, D**N), dtype=torch.complex64)
-#         L = itertools.product(range(D), repeat=N)
-#         L = [np.array(list(l)) for l in L]
-#         l2ns = np.array([L[k] for k in range(D**N)])
-#         l2ns[:,target] = (l2ns[:,control] + l2ns[:,target]) % D
-#         U = torch.tensor([[1.0+0*1j if list(L[i]) == list(l2ns[j]) else 0.0 for j in range(D**N)] for i in range(D**N)])
-
-#         if inverse:
-#             U = torch.conj(self.U).T.contiguous()
-#         self.register_buffer('U', U)
-
-#     def forward(self, x):
-            
-#         return torch.matmul(self.U, x)
+    def forward(self, x):
+        return torch.matmul(self.U, x)
