@@ -401,3 +401,26 @@ class CCNOT(nn.Module):
         
     def forward(self, x):
         return torch.matmul(self.U, x)
+
+
+class MCX(nn.Module):
+    #multi-controlled cx gate
+    #control: list of control qudits
+    #target: qudit target
+    #N: number of qudits
+    def __init__(self, control=[0], target=1, N=3, inverse=False):
+        super(MCX, self).__init__()        
+        L = torch.tensor(list(itertools.product(range(D), repeat=N)))
+        l2ns = L.clone()
+        control_value = 1
+        for i in range(len(control)):
+            control_value *= l2ns[:, control[i]]
+        l2ns[:, target] = (control_value + l2ns[:, target]) % D
+        indices = torch.all(L[:, None, :] == l2ns[None, :, :], dim=2)
+        U = torch.where(indices, torch.tensor([1.0 + 0j], dtype=torch.complex64), torch.tensor([0.0], dtype=torch.complex64))        
+        if inverse:
+            U = torch.conj(U).T.contiguous()
+        self.register_buffer('U', U)
+        
+    def forward(self, x):
+        return torch.matmul(self.U, x)
