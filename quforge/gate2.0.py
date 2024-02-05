@@ -3,6 +3,7 @@ import torch.nn as nn
 import numpy as np
 from math import log as log
 import itertools
+from torch.nn.parameter import Parameter
 
 def State(dits, dim, state=None, device='cpu'):
     D = dim
@@ -297,7 +298,7 @@ class Rot(nn.Module):
         self.I_esq = Identity_sparse(self.dim**self.esq,device=self.device)
         self.I_dir = Identity_sparse(self.dim**self.dir,device=self.device)
 
-        self.angle = nn.Parameter(torch.rand(1)).to(device)
+        self.angle = Parameter(torch.rand(1,device=self.device))
 
     def forward(self, x):
 
