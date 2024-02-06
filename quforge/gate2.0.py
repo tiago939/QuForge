@@ -384,14 +384,36 @@ def pTraceB(state, da, db,device='cpu'):
     rhoA = torch.matmul(state_reshaped, state_conj.transpose(0, 1)).to(device)
     del state_reshaped,state_conj
     return rhoA
-
+'''
 def density_matrix(state, index, dim, N,device='cpu'):
     da = int(dim**len(index))
     db = int( dim**( N-len(index) ) )
     state1 = NewState(state, index, dim, N,device=device)
     rhoA = pTraceB(state1, da, db,device=device)
     return rhoA
+'''
 
+class density_matrix(nn.Module):
+    
+    def __init__(self, index, dim=3,N=2,device='cpu'):
+        super(density_matrix, self).__init__()
+
+        self.index = index
+        self.dim = dim
+        self.n = N
+        self.device = device
+
+        self.da = int(dim**len(index))
+        self.db = int( dim**( N-len(index) ) )
+        
+
+    def forward(self, x):
+        state1 = NewState(x, self.index, self.dim, self.n,device=self.device)
+        rhoA = pTraceB(state1, self.da, self.db,device=self.device)
+        del state1
+        return rhoA
+
+'''
 def prob(state, index, dim, N,device='cpu'):
     probs = []
     for i in range(state.shape[1]):
@@ -402,7 +424,31 @@ def prob(state, index, dim, N,device='cpu'):
         p = p/torch.sum(p)
         probs.append(p)
     return torch.stack(probs)
+'''
 
+class prob(nn.Module):
+    
+    def __init__(self, index, dim=3,N=2,device='cpu'):
+        super(prob, self).__init__()
+
+        self.index = index
+        self.dim = dim
+        self.n = N
+        self.device = device
+        self.dm = density_matrix(index,dim=dim,N=N,device=device)
+
+
+    def forward(self, state):
+        
+        probs = []
+        for i in range(state.shape[1]):
+            state_ = state[:,i]
+            state_ = state_.view(state_.shape[0],-1)
+            rhoA = self.dm(state_) 
+            p = abs(torch.diag(rhoA))
+            p = p/torch.sum(p)
+            probs.append(p)
+        return torch.stack(probs)
 
 
 
