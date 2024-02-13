@@ -116,6 +116,16 @@ def delta(x,y):
         return 0.0
 
 
+def ajustar_dimensao(tensor):
+    # Verificar as dimensões do tensor
+    if tensor.dim() == 1:
+        # Se o tensor tiver dimensão n, adicione uma dimensão extra
+        tensor = tensor.unsqueeze(0)
+    elif tensor.dim() != 2:
+        # Se o tensor não tiver dimensão mxn ou n, exiba uma mensagem de erro
+        raise ValueError("O tensor deve ter dimensão mxn ou n")
+
+    return tensor
 
 class AmplitudeEncoder(nn.Module):
     def __init__(self, n, d,device='cpu'):
@@ -126,6 +136,7 @@ class AmplitudeEncoder(nn.Module):
 
 
     def forward(self, x):
+        x = ajustar_dimensao(x)
 
         x1 = torch.sum(x,dim=1, keepdim=True).to(self.device)
 
