@@ -4,23 +4,19 @@ import numpy as np
 from math import log as log
 import itertools
 
-D = 3
-
 pi = np.pi
-omega = np.exp(2*1j*pi/D)
 
-base = torch.zeros((D, D, 1))
-for i in range(D):
-    base[i][i] = 1.0 + 1j*0.0
-
-def delta(x,y):
-    if x == y:
-        return 1.0
+def delta(i, j):
+    if i == j:
+        return 1
     else:
-        return 0.0
+        return 0
 
+def State(dits, D=2, device='cpu'):
+    base = torch.zeros((D, D, 1), device=device)
+    for i in range(D):
+        base[i][i] = 1.0 + 1j*0.0
 
-def State(dits, state=None, device='cpu'):
     state = torch.eye(1, dtype=torch.complex64, device=device)
     st = ''
     for i in range(len(dits)):
@@ -149,16 +145,22 @@ def mean(state, observable='Z', index=0):
     return output
 
 
-def Sx(j, k):
+def Sx(j, k, base):
     return torch.kron(base[j], base[k].T) + torch.kron(base[k], base[j].T) + 0*1j
 
-def Sy(j, k):
+def Sy(j, k, base):
     return -1j*torch.kron(base[j], base[k].T) + 1j*torch.kron(base[k], base[j].T)
 
-def Sz(j, k):
+def Sz(j, k, base):
     return torch.kron(base[j], base[j].T) - torch.kron(base[k], base[k].T) + 0*1j
 
 sigma = [Sx, Sy, Sz]
+
+
+def Base(D, device='cpu'):
+    base = torch.eye(D).unsqueeze(2)
+    return base
+
 
 class CustomGate(nn.Module):
     def __init__(self, M, index=0):
@@ -178,13 +180,14 @@ class CustomGate(nn.Module):
         return torch.matmul(U, x)
 
 
-class Rotation(nn.Module):
+class RGate(nn.Module):
     #mtx_id: 0:Sx, 1:Sy, 2:Sz
     #j,k: indexes of the Gell-Mann matrices
     #index: index of the qudit to apply the gate
-    def __init__(self, mtx_id=0, j=0, k=1, index=[0], angle=False):
-        super(Rotation, self).__init__()
+    def __init__(self, mtx_id=0, j=0, k=1, index=[0], D=2, angle=False):
+        super(RGate, self).__init__()
 
+        self.D = D
         self.mtx_id = mtx_id
         self.j = j
         self.k = k
@@ -194,11 +197,12 @@ class Rotation(nn.Module):
             self.angle = angle
         self.index = index
 
-        S = sigma[self.mtx_id](self.j, self.k)
+        base = Base(D)
+        S = sigma[self.mtx_id](self.j, self.k, base)
         self.register_buffer('S', S)
 
     def forward(self, x):
-        L = round(log(x.shape[0], D))
+        L = round(log(x.shape[0], self.D))
         U = torch.eye(1, device=x.device)
         for i in range(L):
             if i in self.index:
@@ -212,10 +216,11 @@ class Rotation(nn.Module):
 
 class Hadamard(nn.Module):
     #index: index of the qudit to apply the gate
-    def __init__(self, index=[0], inverse=False):
+    def __init__(self, D=2, index=[0], inverse=False):
         super(Hadamard, self).__init__()
 
         self.index = index
+        omega = np.exp(2*1j*pi/D)
 
         M = torch.ones((D, D), dtype=torch.complex64)
         for i in range(1, D):
@@ -263,8 +268,10 @@ class XGate(nn.Module):
 
 class ZGate(nn.Module):
     #index: index of the qudit to apply the gate
-    def __init__(self, s=1, index=0, device='cpu'):
+    def __init__(self, D=2, s=1, index=0, device='cpu'):
         super(ZGate, self).__init__()
+
+        omega = np.exp(2*1j*pi/D)
 
         self.index = index
         M = torch.zeros((D, D), dtype=torch.complex64, device=device)
@@ -346,13 +353,13 @@ class CNOT(nn.Module):
     #control: control qudit
     #target: target qudit
     #N: number of qudits
-    def __init__(self, control=0, target=1, N=2, inverse=False):
+    def __init__(self, control=0, target=1, N=2, D=2, device='cpu', inverse=False):
         super(CNOT, self).__init__()        
         L = torch.tensor(list(itertools.product(range(D), repeat=N)))
         l2ns = L.clone()
         l2ns[:, target] = (l2ns[:, control] + l2ns[:, target]) % D
         indices = torch.all(L[:, None, :] == l2ns[None, :, :], dim=2)
-        U = torch.where(indices, torch.tensor([1.0 + 0j], dtype=torch.complex64), torch.tensor([0.0], dtype=torch.complex64))        
+        U = torch.where(indices, torch.tensor([1.0 + 0j], dtype=torch.complex64), torch.tensor([0.0], dtype=torch.complex64)).to(device)
         if inverse:
             U = torch.conj(U).T.contiguous()
         self.register_buffer('U', U)    
