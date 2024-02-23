@@ -176,10 +176,10 @@ class CNOT(nn.Module):
     #control: control qudit
     #target: target qudit
     #N: number of qudits
-    def __init__(self, control=0, target=1, dim=3,N=2,device='cpu'):
+    def __init__(self, index = None, dim=3,N=2,device='cpu'):
         super(CNOT, self).__init__()
         D = dim
-        U = CNOT_sparse(control,target,dim,N,device=device)
+        U = CNOT_sparse(index[0],index[1],dim,N,device=device)
 
         self.register_buffer('U', U)
 
