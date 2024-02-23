@@ -406,7 +406,7 @@ def density_matrix(state, index, dim, N,device='cpu'):
 
 class density_matrix(nn.Module):
     
-    def __init__(self, index, dim=3,N=2,device='cpu'):
+    def __init__(self, index = None, dim=3,N=2,device='cpu'):
         super(density_matrix, self).__init__()
 
         self.index = index
@@ -439,7 +439,7 @@ def prob(state, index, dim, N,device='cpu'):
 
 class prob(nn.Module):
     
-    def __init__(self, index, dim=3,N=2,device='cpu'):
+    def __init__(self, index = None, dim=3,N=2,device='cpu'):
         super(prob, self).__init__()
 
         self.index = index
