@@ -115,7 +115,7 @@ def delta(x,y):
     else:
         return 0.0
 
-
+'''
 def ajustar_dimensao(tensor):
     # Verificar as dimensões do tensor
     if tensor.dim() == 1:
@@ -146,6 +146,49 @@ class AmplitudeEncoder(nn.Module):
         y = torch.cat([x,zero],dim=1).to(self.device)
 
         return y.to(torch.complex64).T
+'''
+
+
+def ajustar_dimensao(tensor):
+    # Verificar as dimensões do tensor
+    if tensor.dim() == 1:
+        # Se o tensor tiver dimensão n, adicione uma dimensão extra
+        tensor = tensor.unsqueeze(0)
+    elif tensor.dim() != 2:
+        # Se o tensor não tiver dimensão mxn ou n, exiba uma mensagem de erro
+        raise ValueError("O tensor deve ter dimensão mxn ou n")
+
+    return tensor
+
+
+def normalizar_linhas(tensor):
+    # Calcula a norma de cada linha do tensor
+    norma_linhas = torch.norm(tensor, dim=1, keepdim=True)
+
+    # Normaliza as linhas do tensor
+    tensor_normalizado = tensor / norma_linhas
+
+    return tensor_normalizado
+
+
+class AmplitudeEncoder(nn.Module):
+    def __init__(self, n, d,device='cpu'):
+        super(AmplitudeEncoder, self).__init__()
+        self.n = n
+        self.d = d
+        self.device = device
+
+
+    def forward(self, x):
+        x = ajustar_dimensao(x)
+
+        x = normalizar_linhas(x) 
+
+        zero = torch.zeros(x.shape[0], (self.d**self.n)-x.shape[1] ).to(self.device)
+        y = torch.cat([x,zero],dim=1).to(self.device)
+
+        return y.to(torch.complex64).T
+
 
 
 
