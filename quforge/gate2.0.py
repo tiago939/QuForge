@@ -51,7 +51,7 @@ def Identity_sparse(D,device='cpu'):
 
     return eye_sparse
 
-
+'''
 def sparse(u, device='cpu'):
     u = u.to(device)
     nonzero_coords = torch.nonzero(u).to(device)
@@ -60,6 +60,15 @@ def sparse(u, device='cpu'):
     # Criar uma matriz esparsa usando as coordenadas e valores não nulos
     U_sparse = torch.sparse_coo_tensor(nonzero_coords.t(), values)
 
+    return U_sparse
+'''
+
+def sparse(u, device='cpu'):
+    device = torch.device(device)
+    u = u.to(device)
+    nonzero_coords = torch.nonzero(u, as_tuple=False).t().to(device)
+    values = u[tuple(nonzero_coords)].to(device)
+    U_sparse = torch.sparse_coo_tensor(nonzero_coords, values, u.size(), device=device)
     return U_sparse
 
 
