@@ -157,8 +157,8 @@ def Sz(j, k, base):
 sigma = [Sx, Sy, Sz]
 
 
-def Base(D, device='cpu'):
-    base = torch.eye(D).unsqueeze(2)
+def base(D, device='cpu'):
+    base = torch.eye(D, device=device).reshape((D,D,1))
     return base
 
 
@@ -184,21 +184,23 @@ class RGate(nn.Module):
     #mtx_id: 0:Sx, 1:Sy, 2:Sz
     #j,k: indexes of the Gell-Mann matrices
     #index: index of the qudit to apply the gate
-    def __init__(self, mtx_id=0, j=0, k=1, index=[0], D=2, angle=False):
+    def __init__(self, mtx_id=0, j=0, k=1, index=[0], D=2, device='cpu', angle=False):
         super(RGate, self).__init__()
 
         self.D = D
         self.mtx_id = mtx_id
         self.j = j
         self.k = k
+        self.device = device
+        self.index = index
+
         if angle is False:
-            self.angle = nn.Parameter(4*pi*torch.rand(len(index)))
+            self.angle = nn.Parameter(4*pi*torch.rand(len(index), device=device))
         else:
             self.angle = angle
         self.index = index
 
-        base = Base(D)
-        S = sigma[self.mtx_id](self.j, self.k, base)
+        S = sigma[self.mtx_id](self.j, self.k, base(D, device=device))
         self.register_buffer('S', S)
 
     def forward(self, x):
@@ -210,19 +212,21 @@ class RGate(nn.Module):
                 U = torch.kron(U, M)
             else:
                 U = torch.kron(U, torch.eye(D, device=x.device))
-
+        
         return torch.matmul(U, x)
     
 
-class Hadamard(nn.Module):
+class HGate(nn.Module):
     #index: index of the qudit to apply the gate
-    def __init__(self, D=2, index=[0], inverse=False):
-        super(Hadamard, self).__init__()
+    def __init__(self, D=2, index=[0], inverse=False, device='cpu'):
+        super(HGate, self).__init__()
 
         self.index = index
+        self.device = device
+        self.D = D
         omega = np.exp(2*1j*pi/D)
 
-        M = torch.ones((D, D), dtype=torch.complex64)
+        M = torch.ones((D, D), dtype=torch.complex64, device=device)
         for i in range(1, D):
             for j in range(1, D):
                 M[i, j] = omega**(j*i)
@@ -232,48 +236,49 @@ class Hadamard(nn.Module):
         self.register_buffer('M', M)
 
     def forward(self, x):
-        L = round(log(x.shape[0], D))
-        U = torch.eye(1, device=x.device)
+        L = round(log(x.shape[0], self.D))
+        U = torch.eye(1, device=self.device, dtype=torch.complex64)
         for i in range(L):
             if i in self.index:
                 U = torch.kron(U, self.M)
             else:
-                U = torch.kron(U, torch.eye(D, device=x.device))
-
+                U = torch.kron(U, torch.eye(self.D, device=self.device, dtype=torch.complex64))
         return torch.matmul(U, x)
 
 
 class XGate(nn.Module):
     #index: index of the qudit to apply the gate
-    def __init__(self, s=1, index=0, device='cpu'):
+    def __init__(self, s=1, D=2, index=[0], device='cpu'):
         super(XGate, self).__init__()
 
         self.index = index
-        M = torch.zeros((D, D), dtype=torch.complex64)
+        self.D = D
+        M = torch.zeros((D, D), dtype=torch.complex64, device=device)
         for i in range(D):
             for j in range(D):
-                M[j][i] = torch.matmul(base[j].T, base[(i+s) % D])
+                M[j][i] = torch.matmul(base(D)[j].T, base(D)[(i+s) % D])
         self.register_buffer('M', M)   
         
     def forward(self, x):
-        L = round(log(x.shape[0], D))
-        U = torch.eye(1, device=x.device)
+        L = round(log(x.shape[0], self.D))
+        U = torch.eye(1, dtype=torch.complex64, device=x.device)
         for i in range(L):
             if i == self.index:
                 U = torch.kron(U, self.M)
             else:
-                U = torch.kron(U, torch.eye(D, device=x.device))
+                U = torch.kron(U, torch.eye(self.D, dtype=torch.complex64, device=x.device))
         return torch.matmul(U, x)
 
 
 class ZGate(nn.Module):
     #index: index of the qudit to apply the gate
-    def __init__(self, D=2, s=1, index=0, device='cpu'):
+    def __init__(self, D=2, s=1, index=[0], device='cpu'):
         super(ZGate, self).__init__()
 
         omega = np.exp(2*1j*pi/D)
 
         self.index = index
+        self.D = D
         M = torch.zeros((D, D), dtype=torch.complex64, device=device)
         for i in range(D):
             for j in range(D):
@@ -281,36 +286,37 @@ class ZGate(nn.Module):
         self.register_buffer('M', M)   
         
     def forward(self, x):
-        L = round(log(x.shape[0], D))
-        U = torch.eye(1, device=x.device)
+        L = round(log(x.shape[0], self.D))
+        U = torch.eye(1, device=x.device, dtype=torch.complex64)
         for i in range(L):
             if i == self.index:
                 U = torch.kron(U, self.M)
             else:
-                U = torch.kron(U, torch.eye(D, device=x.device))
+                U = torch.kron(U, torch.eye(self.D, device=x.device,  dtype=torch.complex64))
         
         return torch.matmul(U, x)
 
 
 class YGate(nn.Module):
     #index: index of the qudit to apply the gate
-    def __init__(self, s=1, index=0, device='cpu'):
+    def __init__(self, s=1, D=2, index=[0], device='cpu'):
         super(YGate, self).__init__()
 
         self.index = index
+        self.D = D
         X = XGate(s=s, device=device).M
         Z = ZGate(device=device).M
         M = torch.matmul(Z, X)/1j
         self.register_buffer('M', M) 
         
     def forward(self, x):
-        L = round(log(x.shape[0], D))
-        U = torch.eye(1, device=x.device)
+        L = round(log(x.shape[0], self.D))
+        U = torch.eye(1, device=x.device, dtype=torch.complex64)
         for i in range(L):
             if i == self.index:
                 U = torch.kron(U, self.M)
             else:
-                U = torch.kron(U, torch.eye(D, device=x.device))
+                U = torch.kron(U, torch.eye(self.D, device=x.device, dtype=torch.complex64))
         
         return torch.matmul(U, x)
 
@@ -324,7 +330,7 @@ class XdGate(nn.Module):
         M = torch.zeros((D, D), dtype=torch.complex64)
         for i in range(D):
             for j in range(D):
-                M[j][i] = torch.matmul(base[j].T, base[(D-i) % D])
+                M[j][i] = torch.matmul(base(D)[j].T, base(D)[(D-i) % D])
         self.register_buffer('M', M)   
         
     def forward(self, x):

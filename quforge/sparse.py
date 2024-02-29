@@ -4,6 +4,7 @@ import numpy as np
 from math import log as log
 import itertools
 
+pi = np.pi
 
 def Sx(j, k, base):
 
@@ -36,9 +37,9 @@ def eye(D, device='cpu'):
     Output:
         -eye_sparse: sparse identity matrix
     '''
-    indices = torch.arange(D).repeat(2, 1).to(device)
-    values = torch.ones(D).to(device)
-    eye_sparse = torch.sparse_coo_tensor(indices, values, (D, D)).to(device)
+    indices = torch.arange(D, device=device).repeat(2, 1)
+    values = torch.ones(D, dtype=torch.complex64, device=device)
+    eye_sparse = torch.sparse_coo_tensor(indices, values, (D, D))
 
     return eye_sparse
 
@@ -104,8 +105,8 @@ def kron(matrix1, matrix2, D1, D2, device='cpu'):
     return matrix
 
 
-def Base(D, device='cpu'):
-    base = torch.eye(D).unsqueeze(2)
+def base(D, device='cpu'):
+    base = torch.eye(D, device=device).reshape((D, D, 1))
     return base
 
 
@@ -260,103 +261,85 @@ class CNOT(nn.Module):
 
 class XGate(nn.Module):
     #index: index of the qudit to apply the gate
-    def __init__(self, s=1, index=0, D=2, N=1, device='cpu'):
+    def __init__(self, s=1, index=[0], D=2, N=1, device='cpu'):
         super(XGate, self).__init__()
 
         self.index = index
 
-        base = Base(D)
-        self.M = torch.zeros((D, D), dtype=torch.complex64).to(device)
+        self.index = index
+        self.D = D
+        M = torch.zeros((D, D), dtype=torch.complex64, device=device)
         for i in range(D):
             for j in range(D):
-                self.M[j][i] = torch.matmul(base[j].T, base[(i+s) % D]).to(device)
-        self.M = nn.Parameter(self.M).requires_grad_(False)
-
-        self.M1 = tosparse(self.M,device=device)
-        del self.M
-
-        esq,dir = nQudit(N,index)
-
-        I_esq = eye(D**esq,device=device)
-        I_dir = eye(D**dir,device=device)
-
-        U = kron(self.M1,I_dir,D,D**dir,device=device)
-        U = kron(I_esq,U,D**esq,D*(D**dir),device=device)
-
-        del esq,dir,I_esq,I_dir
-
-        self.U = U
+                M[j][i] = torch.matmul(base(D)[j].T, base(D)[(i+s) % D])
+        M = M.to_sparse()
+        self.register_buffer('M', M)   
 
     def forward(self, x):
+        L = round(log(x.shape[0], self.D))
+        U = eye(1, device=x.device)
+        for i in range(L):
+            if i == self.index:
+                U = kron(U, self.M, D1=U.shape[0], D2=self.M.shape[0])
+            else:
+                U = kron(U, eye(self.D, device=x.device), D1=U.shape[0], D2=self.D)
 
-        return self.U @ x
+        return U @ x
 
 
 class ZGate(nn.Module):
     #index: index of the qudit to apply the gate
-    def __init__(self, s=1, index=0, D=2, N=1, device='cpu'):
+    def __init__(self, s=1, index=[0], D=2, N=1, device='cpu'):
         super(ZGate, self).__init__()
 
         self.device = device
         self.index = index
 
-        self.M = torch.zeros((D, D), dtype=torch.complex64, device=device)
-        pi = np.pi
         omega = np.exp(2*1j*pi/D)
+
+        self.index = index
+        self.D = D
+        M = torch.zeros((D, D), dtype=torch.complex64, device=device)
         for i in range(D):
             for j in range(D):
-                self.M[j][i] = (omega**(j*s))*delta(i,j)
-        self.M = nn.Parameter(self.M).requires_grad_(False)
-
-        self.M1 = tosparse(self.M,device=device)
-        del self.M
-
-        esq,dir = nQudit(N,index)
-
-        I_esq = eye(D**esq,device=device)
-        I_dir = eye(D**dir,device=device)
-
-        U = kron(self.M1,I_dir,D,D**dir,device=device)
-        U = kron(I_esq,U,D**esq,D*(D**dir),device=device)
-
-        del esq,dir,I_esq,I_dir
-
-        self.U = U
+                M[j][i] = (omega**(j*s))*delta(i,j)
+        M = M.to_sparse()
+        self.register_buffer('M', M)   
 
     def forward(self, x):
+        L = round(log(x.shape[0], self.D))
+        U = eye(1, device=x.device)
+        for i in range(L):
+            if i == self.index:
+                U = kron(U, self.M, D1=U.shape[0], D2=self.M.shape[0])
+            else:
+                U = kron(U, eye(self.D, device=x.device), D1=U.shape[0], D2=self.D)
 
-        return self.U @ x
+        return U @ x
 
 
 class YGate(nn.Module):
     #index: index of the qudit to apply the gate
-    def __init__(self, s=1, index=0, D=2, N=1, device='cpu' ):
+    def __init__(self, s=1, index=[0], D=2, N=1, device='cpu'):
         super(YGate, self).__init__()
 
-
-        X = XGate(s=s,N=N, D=D, device=device).M1
-        Z = ZGate(D=D, N=N, device=device).M1
-
-        M = (Z @ X)/1j
-        self.M1 = M
-        del M,X,Z
-
-        esq,dir = nQudit(N,index)
-
-        I_esq = eye(D**esq,device=device)
-        I_dir = eye(D**dir,device=device)
-
-        U = kron(self.M1, I_dir, D, D**dir,device=device)
-        U = kron(I_esq, U, D**esq, D*(D**dir),device=device)
-
-        del esq,dir,I_esq,I_dir
-
-        self.U = U
-
+        self.index = index
+        self.D = D
+        X = XGate(s=s, device=device).M
+        Z = ZGate(device=device).M
+        M = torch.matmul(Z, X)/1j
+        self.register_buffer('M', M) 
 
     def forward(self, x):
+        L = round(log(x.shape[0], self.D))
+        U = eye(1, device=x.device)
+        for i in range(L):
+            if i == self.index:
+                U = kron(U, self.M, D1=U.shape[0], D2=self.M.shape[0])
+            else:
+                U = kron(U, eye(self.D, device=x.device), D1=U.shape[0], D2=self.D)
 
-        return self.U @ x
+        return U @ x
 
 
 class RGate(nn.Module):
@@ -369,22 +352,22 @@ class RGate(nn.Module):
 
         self.index = index
         self.D = D
+        self.device = device
 
-        base = Base(D)
-        S = sigma[mtx_id](j, k, base).to(device)
-        self.angle = nn.Parameter(torch.rand(len(index)))
+        S = sigma[mtx_id](j, k, base(D, device=device)).to(device)
+        self.angle = nn.Parameter(torch.rand(len(index), device=device))
         self.register_buffer('S', S)
 
     def forward(self, x):
         L = round(log(x.shape[0], self.D))
-        U = torch.eye(1, device=x.device)
+        U = eye(1, device=x.device)
         for i in range(L):
             if i in self.index:
                 M = torch.matrix_exp(-0.5*1j*self.angle[i]*self.S)
-                U = torch.kron(U, M)
+                M = M.to_sparse()
+                U = kron(U, M, D1=U.shape[0], D2=M.shape[0])
             else:
-                U = torch.kron(U, torch.eye(D, device=x.device))
-        U = tosparse(U)
+                U = kron(U, eye(D, device=self.device), D1=U.shape[0], D2=D)
 
         return U @ x
 
@@ -396,6 +379,7 @@ class HGate(nn.Module):
 
         self.D = D
         self.index = index
+        self.device = device
 
         pi = np.pi
         omega = np.exp(2*1j*pi/D)
@@ -411,11 +395,10 @@ class HGate(nn.Module):
 
     def forward(self, x):
         L = round(log(x.shape[0], self.D))
-        U = eye(1, device=x.device)
+        U = eye(1, device=self.device)
         for i in range(L):
             if i in self.index:
-                U = kron(U, self.M, self.D, self.D)
+                U = kron(U, self.M, U.shape[0], self.M.shape[0])
             else:
-                U = kron(U, eye(D, device=x.device), self.D, self.D)
-
+                U = kron(U, eye(self.D, device=self.device), U.shape[0], self.D)
         return U @ x
