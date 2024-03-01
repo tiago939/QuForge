@@ -7,7 +7,7 @@ sys.path.append('../')
 from quforge import gates as qf
 from quforge import sparse
 
-Ds = [2] + [i for i in range(2, 16)]
+Ds = [2] + [2**i for i in range(1,10)]
 initial_state = '0'
 
 T_init_dense_cpu = []

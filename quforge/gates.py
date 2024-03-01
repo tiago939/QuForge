@@ -156,7 +156,6 @@ def Sz(j, k, base):
 
 sigma = [Sx, Sy, Sz]
 
-
 def base(D, device='cpu'):
     base = torch.eye(D, device=device).reshape((D,D,1))
     return base
@@ -437,3 +436,38 @@ class MCX(nn.Module):
         
     def forward(self, x):
         return torch.matmul(self.U, x)
+
+
+class CR(nn.Module):
+    '''
+    Controlled rotation gate
+    TO DO: optimize this gate
+    '''
+    def __init__(self, control=0, target=1, D=2, mtx_id=0, j=0, k=1, device='cpu'):
+        super(CR, self).__init__()
+
+        self.D = D
+        self.control = control
+        self.target = target
+
+        self.angle = nn.Parameter(4*pi*torch.rand(1, device=device))
+        S = sigma[mtx_id](j, k, base(D, device=device))
+        self.register_buffer('S', S)
+    
+    def forward(self, x):
+        L = round(log(x.shape[0], self.D))
+
+        U = 0.0
+        for d in range(self.D):
+            u = torch.eye(1, device=x.device, dtype=torch.complex64)
+            for i in range(L):
+                if i == self.control:
+                    u = torch.kron(u, base(self.D)[d] @ base(self.D)[d].T)
+                elif i == self.target:
+                    M = torch.matrix_exp(-0.5*1j*self.angle*d*self.S)
+                    u = torch.kron(u, M)
+                else:
+                    u = torch.kron(u, torch.eye(self.D, device=x.device, dtype=torch.complex64))
+            U += u
+        return U @ x
+
