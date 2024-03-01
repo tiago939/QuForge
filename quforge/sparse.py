@@ -3,6 +3,8 @@ import torch.nn as nn
 import numpy as np 
 from math import log as log
 import itertools
+#import expmsparse as expm
+from quforge import expmsparse as expm
 
 pi = np.pi
 
@@ -363,8 +365,9 @@ class RGate(nn.Module):
         U = eye(1, device=x.device)
         for i in range(L):
             if i in self.index:
-                M = torch.matrix_exp(-0.5*1j*self.angle[i]*self.S)
-                M = M.to_sparse()
+                #M = torch.matrix_exp(-0.5*1j*self.angle[i]*self.S)
+                #M = M.to_sparse()
+                M = expm.expm(-0.5*1j*self.angle[i]*self.S)
                 U = kron(U, M, D1=U.shape[0], D2=M.shape[0])
             else:
                 U = kron(U, eye(D, device=self.device), D1=U.shape[0], D2=D)

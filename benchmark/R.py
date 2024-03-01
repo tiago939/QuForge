@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import sys
 import time
 import matplotlib.pyplot as plt
@@ -9,6 +10,7 @@ from quforge import sparse
 
 Ds = [2] + [2**i for i in range(1, 10)]
 initial_state = '0'
+T = 1
 
 T_init_dense_cpu = []
 T_init_sparse_cpu = []
@@ -33,80 +35,126 @@ for D in Ds:
     state = qf.State(initial_state, D=D, device=device)
     state.requires_grad_(True)
 
-    t0 = time.time()
+    mean = []
+    for _ in range(T):
+        t0 = time.time()
+        qf.RGate(D=D, device=device)
+        t1 = time.time()
+        mean.append(t1-t0)
+    T_init_dense_cpu.append(np.mean(mean))
+
     U = qf.RGate(D=D, device=device)
-    t1 = time.time()
-    T_init_dense_cpu.append(t1-t0)
+    mean = []
+    for _ in range(T):
+        t0 = time.time()
+        U(state)
+        t1 = time.time()
+        mean.append(t1-t0)
+    T_run_dense_cpu.append(np.mean(mean))
 
-    t0 = time.time()
     output = U(state)
-    t1 = time.time()
-    T_run_dense_cpu.append(t1-t0)
+    mean = []
+    for _ in range(T):
+        t0 = time.time()
+        torch.autograd.grad(output.sum(), state, create_graph=True, retain_graph=True)
+        t1 = time.time()
+        mean.append(t1-t0)
+    T_grad_dense_cpu.append(np.mean(mean))
 
-    t0 = time.time()
-    grad = torch.autograd.grad(output.sum(), state, create_graph=True, retain_graph=True)
-    t1 = time.time()
-    T_grad_dense_cpu.append(t1-t0)
+    mean = []
+    for _ in range(T):
+        t0 = time.time()
+        sparse.RGate(D=D, device=device)
+        t1 = time.time()
+        mean.append(t1-t0)
+    T_init_sparse_cpu.append(np.mean(mean))
 
-    t0 = time.time()
     U = sparse.RGate(D=D, device=device)
-    t1 = time.time()
-    T_init_sparse_cpu.append(t1-t0)
+    mean = []
+    for _ in range(T):
+        t0 = time.time()
+        U(state)
+        t1 = time.time()
+        mean.append(t1-t0)
+    T_run_sparse_cpu.append(np.mean(mean))
 
-    t0 = time.time()
     output = U(state)
-    t1 = time.time()
-    T_run_sparse_cpu.append(t1-t0)
-
-    t0 = time.time()
-    grad = torch.autograd.grad(output.sum(), state, create_graph=True, retain_graph=True)
-    t1 = time.time()
-    T_grad_sparse_cpu.append(t1-t0)
+    mean = []
+    for _ in range(T):
+        t0 = time.time()
+        torch.autograd.grad(output.sum(), state, create_graph=True, retain_graph=True)
+        t1 = time.time()
+        mean.append(t1-t0)
+    T_grad_sparse_cpu.append(np.mean(mean))
 
     device = 'cuda'
 
     state = qf.State(initial_state, D=D, device=device)
     state.requires_grad_(True)
 
-    torch.cuda.synchronize()
-    t0 = time.time()
+    mean = []
+    for _ in range(T):
+        torch.cuda.synchronize()
+        t0 = time.time()
+        qf.RGate(D=D, device=device)
+        torch.cuda.synchronize()
+        t1 = time.time()
+        mean.append(t1-t0)
+    T_init_dense_gpu.append(np.mean(mean))
+
     U = qf.RGate(D=D, device=device)
-    torch.cuda.synchronize()
-    t1 = time.time()
-    T_init_dense_gpu.append(t1-t0)
+    mean = []
+    for _ in range(T):
+        torch.cuda.synchronize()
+        t0 = time.time()
+        U(state)
+        torch.cuda.synchronize()
+        t1 = time.time()
+        mean.append(t1-t0)
+    T_run_dense_gpu.append(np.mean(mean))
 
-    torch.cuda.synchronize()
-    t0 = time.time()
     output = U(state)
-    torch.cuda.synchronize()
-    t1 = time.time()
-    T_run_dense_gpu.append(t1-t0)
+    mean = []
+    for _ in range(T):
+        torch.cuda.synchronize()
+        t0 = time.time()
+        torch.autograd.grad(output.sum(), state, create_graph=True, retain_graph=True)
+        torch.cuda.synchronize()
+        t1 = time.time()
+        mean.append(t1-t0)
+    T_grad_dense_gpu.append(np.mean(mean))
 
-    t0 = time.time()
-    grad = torch.autograd.grad(output.sum(), state, create_graph=True, retain_graph=True)
-    t1 = time.time()
-    T_grad_dense_gpu.append(t1-t0)
+    mean = []
+    for _ in range(T):
+        torch.cuda.synchronize()
+        t0 = time.time()
+        sparse.RGate(D=D, device=device)
+        torch.cuda.synchronize()
+        t1 = time.time()
+        mean.append(t1-t0)
+    T_init_sparse_gpu.append(np.mean(mean))
 
-    torch.cuda.synchronize()
-    t0 = time.time()
     U = sparse.RGate(D=D, device=device)
-    torch.cuda.synchronize()
-    t1 = time.time()
-    T_init_sparse_gpu.append(t1-t0)
+    mean = []
+    for _ in range(T):
+        torch.cuda.synchronize()
+        t0 = time.time()
+        U(state)
+        torch.cuda.synchronize()
+        t1 = time.time()
+        mean.append(t1-t0)
+    T_run_sparse_gpu.append(np.mean(mean))
 
-    torch.cuda.synchronize()
-    t0 = time.time()
     output = U(state)
-    torch.cuda.synchronize()
-    t1 = time.time()
-    T_run_sparse_gpu.append(t1-t0)
-
-    torch.cuda.synchronize()
-    t0 = time.time()
-    grad = torch.autograd.grad(output.sum(), state, create_graph=True, retain_graph=True)
-    torch.cuda.synchronize()
-    t1 = time.time()
-    T_grad_sparse_gpu.append(t1-t0)
+    mean = []
+    for _ in range(T):
+        torch.cuda.synchronize()
+        t0 = time.time()
+        torch.autograd.grad(output.sum(), state, create_graph=True, retain_graph=True)
+        torch.cuda.synchronize()
+        t1 = time.time()
+        mean.append(t1-t0)
+    T_grad_sparse_gpu.append(np.mean(mean))
 
 plt.plot(Ds[1::], T_init_dense_cpu[1::], label='dense cpu')
 plt.plot(Ds[1::], T_init_sparse_cpu[1::], label='sparse cpu')
