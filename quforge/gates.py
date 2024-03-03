@@ -175,6 +175,30 @@ class Circuit(nn.Module):
         gate = module(D=self.dim, device=self.device, **kwargs)
         self.circuit.add_module(str(len(self.circuit)), gate)
 
+    def add_gate(self, gate, **kwargs):
+        self.circuit.add_module(str(len(self.circuit)), gate)
+
+    def H(self, **kwargs):
+        self.add_gate(HGate(D=self.dim, device=self.device, **kwargs))
+
+    def R(self, **kwargs):
+        self.add_gate(RGate(D=self.dim, device=self.device, **kwargs))
+
+    def CNOT(self, **kwargs):
+        self.add_gate(CNOT(D=self.dim, device=self.device, **kwargs))
+
+    def X(self, **kwargs):
+        self.add_gate(XGate(D=self.dim, device=self.device, **kwargs))
+
+    def Y(self, **kwargs):
+        self.add_gate(YGate(D=self.dim, device=self.device, **kwargs))
+
+    def Z(self, **kwargs):
+        self.add_gate(ZGate(D=self.dim, device=self.device, **kwargs))
+
+    def SWAP(self, **kwargs):
+        self.add_gate(SWAP(D=self.dim, device=self.device, **kwargs))
+
     def forward(self, x):
         return self.circuit(x)
 
@@ -220,12 +244,15 @@ class RGate(nn.Module):
         S = sigma[self.mtx_id](self.j, self.k, base(D, device=device))
         self.register_buffer('S', S)
 
-    def forward(self, x):
+    def forward(self, x, param=False):
         L = round(log(x.shape[0], self.D))
         U = torch.eye(1, device=x.device)
         for i in range(L):
             if i in self.index:
-                M = torch.matrix_exp(-0.5*1j*self.angle[i]*self.S)
+                if param is False:
+                    M = torch.matrix_exp(-0.5*1j*self.angle[i]*self.S)
+                else:
+                    M = torch.matrix_exp(-0.5*1j*self.param[i]*self.S)
                 U = torch.kron(U, M)
             else:
                 U = torch.kron(U, torch.eye(self.D, device=x.device))
@@ -340,24 +367,25 @@ class YGate(nn.Module):
 
 class XdGate(nn.Module):
     #index: index of the qudit to apply the gate
-    def __init__(self, index=0, device='cpu'):
+    def __init__(self, D=2, index=0, device='cpu'):
         super(XdGate, self).__init__()
 
+        self.D = D
         self.index = index
-        M = torch.zeros((D, D), dtype=torch.complex64)
+        M = torch.zeros((D, D), dtype=torch.complex64, device=device)
         for i in range(D):
             for j in range(D):
-                M[j][i] = torch.matmul(base(D)[j].T, base(D)[(D-i) % D])
+                M[j][i] = torch.matmul(base(D, device=device)[j].T, base(D, device=device)[(D-i) % D])
         self.register_buffer('M', M)   
         
     def forward(self, x):
-        L = round(log(x.shape[0], D))
+        L = round(log(x.shape[0], self.D))
         U = torch.eye(1, device=x.device)
         for i in range(L):
             if i == self.index:
                 U = torch.kron(U, self.M)
             else:
-                U = torch.kron(U, torch.eye(D, device=x.device))
+                U = torch.kron(U, torch.eye(self.D, device=x.device))
         return torch.matmul(U, x)
 
 
@@ -393,13 +421,13 @@ class CNOT(nn.Module):
 
 class SWAP(nn.Module):
     #swap the state of two qudits
-    def __init__(self, qudit1=0, qudit2=1, N=2):
+    def __init__(self, qudit1=0, qudit2=1, D=2, N=2, device='cpu'):
         super(SWAP, self).__init__()
 
-        self.U1 = CNOT(control=qudit1, target=qudit2, N=N)
-        self.U2 = CNOT(control=qudit2, target=qudit1, N=N)
-        self.U3 = XdGate(index=qudit1)
-        self.U4 = XdGate(index=qudit2)
+        self.U1 = CNOT(control=qudit1, target=qudit2, N=N, device=device)
+        self.U2 = CNOT(control=qudit2, target=qudit1, N=N, device=device)
+        self.U3 = XdGate(index=qudit1, device=device, D=D)
+        self.U4 = XdGate(index=qudit2, device=device, D=D)
 
     def forward(self, x):
         x = self.U4(x)

@@ -13,9 +13,17 @@ device='cuda'
 
 circuit = qf.Circuit(dim=2, wires=2, device=device)
 
-circuit.add(qf.HGate)
-circuit.add(qf.RGate, mtx_id=0)
-circuit.add(qf.CNOT)
+#circuit.add(qf.HGate)
+#circuit.add(qf.RGate, mtx_id=0)
+#circuit.add(qf.CNOT)
+
+circuit.H()
+circuit.R(angle=[0.5])
+circuit.CNOT()
+circuit.X(index=[1])
+circuit.SWAP()
+
+print(circuit)
 
 x = State('0-0', device=device)
 
