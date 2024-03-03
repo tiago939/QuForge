@@ -161,6 +161,24 @@ def base(D, device='cpu'):
     return base
 
 
+class Circuit(nn.Module):
+    '''This class allows users to add gates dynamically'''
+    def __init__(self, dim=2, wires=1, device='cpu'):
+        super(Circuit, self).__init__()
+
+        self.dim = dim 
+        self.wires = wires
+        self.device = device
+        self.circuit = nn.Sequential()
+
+    def add(self, module, **kwargs):
+        gate = module(D=self.dim, device=self.device, **kwargs)
+        self.circuit.add_module(str(len(self.circuit)), gate)
+
+    def forward(self, x):
+        return self.circuit(x)
+
+
 class CustomGate(nn.Module):
     def __init__(self, M, index=0):
         super(CustomGate, self).__init__()
@@ -210,7 +228,7 @@ class RGate(nn.Module):
                 M = torch.matrix_exp(-0.5*1j*self.angle[i]*self.S)
                 U = torch.kron(U, M)
             else:
-                U = torch.kron(U, torch.eye(D, device=x.device))
+                U = torch.kron(U, torch.eye(self.D, device=x.device))
         
         return torch.matmul(U, x)
     
