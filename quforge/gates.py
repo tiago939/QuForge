@@ -146,10 +146,10 @@ def mean(state, observable='Z', index=0):
 
 
 def Sx(j, k, base):
-    return torch.kron(base[j], base[k].T) + torch.kron(base[k], base[j].T) + 0*1j
+    return torch.kron(base[j-1], base[k-1].T) + torch.kron(base[k-1], base[j-1].T) + 0*1j
 
 def Sy(j, k, base):
-    return -1j*torch.kron(base[j], base[k].T) + 1j*torch.kron(base[k], base[j].T)
+    return -1j*torch.kron(base[j-1], base[k-1].T) + 1j*torch.kron(base[k-1], base[j-1].T)
 
 def Sz(j, base):
     #return torch.kron(base[j], base[j].T) - torch.kron(base[k], base[k].T) + 0*1j
