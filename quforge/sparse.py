@@ -17,8 +17,12 @@ def Sy(j, k, base):
     return -1j*torch.kron(base[j], base[k].T) + 1j*torch.kron(base[k], base[j].T)
 
 def Sz(j, k, base):
-
-    return torch.kron(base[j], base[j].T) - torch.kron(base[k], base[k].T) + 0*1j
+    #return torch.kron(base[j], base[j].T) - torch.kron(base[k], base[k].T) + 0*1j
+    f = (2.0/(j*(j+1)))**0.5
+    s = 0.0
+    for k in range(0, j+1):
+        s += ((-j)**delta(k,j))*torch.kron(base[k], base[k].T)
+    return f*s + 0*1j
 
 sigma = [Sx, Sy, Sz]
 
