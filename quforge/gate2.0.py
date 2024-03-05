@@ -514,4 +514,79 @@ class prob(nn.Module):
         return torch.stack(probs)
 
 
+def contar_elementos(lista):
+    count = 0
+    for elemento in lista:
+        if isinstance(elemento, list):
+            count += 1
+
+    return count
+
+
+class density_matrixT(nn.Module):
+
+    def __init__(self, index=None, dim=3,N=2,device='cpu'):
+        super(density_matrixT, self).__init__()
+
+        self.index = index
+        self.dim = dim
+        self.n = N
+        self.device = device
+
+        self.count = contar_elementos(index)
+        self.da = []
+        self.db = []
+        if self.count == 0:
+            self.da.append(int(dim**len(index)))
+            self.db.append(int( dim**( N-len(index) ) ))
+        else:
+            for i in range(self.count):
+                self.da.append( int(dim**len(index[i])) )
+                self.db.append(int( dim**( N-len(index[i]) ) ))
+
+
+    def forward(self, x):
+        rhoA = []
+        if self.count == 0:
+            state1 = NewState(x, self.index, self.dim, self.n,device=self.device)
+            rhoA.append(pTraceB(state1, self.da[0], self.db[0],device=self.device))
+            del state1
+        else:
+            for i in range(self.count):
+                state1 = NewState(x, self.index[i], self.dim, self.n,device=self.device)
+                rhoA.append(pTraceB(state1, self.da[i], self.db[i],device=self.device))
+                del state1
+        return torch.stack(rhoA)
+
+
+class mean(nn.Module):
+
+    def __init__(self, index=None, H = None, dim=3,N=2,device='cpu'):
+        super(mean, self).__init__()
+
+        self.index = index
+        self.dim = dim
+        self.n = N
+        self.device = device
+        self.H = H.to(torch.complex64)
+
+        self.dm = density_matrixT(index=index,dim=dim,N=N,device=device)
+
+
+    def forward(self, state):
+        med = []
+
+        for i in range(state.shape[1]):
+            state_ = state[:,i]
+            state_ = state_.view(state_.shape[0],-1)
+            rhoA = self.dm(state_)
+
+            Hrho = torch.matmul(self.H,rhoA)
+
+            soma_diagonais = abs(torch.diagonal(Hrho, dim1=1, dim2=2).sum(dim=1))
+            med.append(soma_diagonais)
+
+        return torch.stack(med)
+
+
 
