@@ -376,7 +376,8 @@ class Rot(nn.Module):
         U = sparse_kron(M,self.I_dir,self.dim,self.dim**self.dir,device=self.device)
         U = sparse_kron(self.I_esq,U,self.dim**self.esq,self.dim*(self.dim**self.dir),device=self.device)
 
-        return U@x
+        #return U@x
+        return torch.sparse.mm(U,x)
 
 class Hadamard(nn.Module):
     #index: index of the qudit to apply the gate
