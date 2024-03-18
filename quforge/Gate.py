@@ -414,7 +414,7 @@ class Hadamard(nn.Module):
 
         return torch.sparse.mm(x.T, self.U).T
 
-
+'''
 def remove_elements(N, list, device='cpu'):
     tensor = torch.arange(N).to(device)
 
@@ -425,6 +425,22 @@ def remove_elements(N, list, device='cpu'):
 
     # Apply the mask to keep only elements not present in the list
     tensor_result = tensor[mask]
+
+    return tensor_result
+'''
+def remove_elements(N, my_list, device='cpu'):
+    tensor = torch.arange(N).to(device)
+
+    # Criar um tensor com os elementos da lista para verificar a ocorrência
+    list_tensor = torch.tensor(my_list, device=device)
+
+    # Criar um tensor com os índices dos elementos que devem ser removidos
+    indices_to_remove = torch.zeros(N, dtype=torch.bool, device=device)
+    for element in my_list:
+        indices_to_remove[element] = True
+
+    # Criar o tensor resultante removendo os elementos
+    tensor_result = tensor[~indices_to_remove]
 
     return tensor_result
 
