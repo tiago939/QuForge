@@ -363,7 +363,8 @@ class Rot(nn.Module):
         self.I_esq = Identity_sparse(self.dim**self.esq,device=self.device)
         self.I_dir = Identity_sparse(self.dim**self.dir,device=self.device)
 
-        self.angle = Parameter(torch.rand(1,device=self.device))
+        #self.angle = Parameter(torch.rand(1,device=self.device))
+        self.angle = Parameter(torch.FloatTensor(1).uniform_(0, 2*math.pi))
 
     def forward(self, x):
 
