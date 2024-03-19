@@ -4,6 +4,7 @@ import numpy as np
 from math import log as log
 import itertools
 from torch.nn.parameter import Parameter
+import math
 
 def State(dits, dim, state=None, device='cpu'):
     D = dim
