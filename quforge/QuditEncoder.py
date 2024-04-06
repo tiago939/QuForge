@@ -65,7 +65,7 @@ class QubitEncoder(nn.Module):
         self.N = N
         self.layer = []
         for i in range(N):
-            self.layer.append( opt.RotT( mtx_id=mtx_id, j=j, k=k,dim=dim,N=N,device=device ) )
+            self.layer.append( opt.RotT( mtx_id=mtx_id, index=i, j=j, k=k,dim=dim,N=N,device=device ) )
 
 
     def forward(self, x):
