@@ -2,3 +2,5 @@
 
 # QuForge
 Quantum simulator of qudits
+
+Paper coming soon, for now you can check the jupyter files in the examples folder
