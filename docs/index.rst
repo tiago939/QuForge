@@ -10,6 +10,8 @@ Welcome to QuForge's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   gates
+
 
 
 Indices and tables
