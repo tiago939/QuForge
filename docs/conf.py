@@ -8,7 +8,7 @@
 
 import os
 import sys
-sys.path.insert(0, os.path.abspath('..'))
+sys.path.insert(0, os.path.abspath('../quforge'))
 
 project = 'QuForge'
 copyright = '2024, Tiago de Souza Farias, Lucas Friedrich, Jonas Maziero'

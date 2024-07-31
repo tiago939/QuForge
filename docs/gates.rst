@@ -3,7 +3,7 @@
 Quantum Gates
 =============
 
-.. automodule:: quforge.quforge
+.. automodule:: quforge
     :members:
     :undoc-members:
     :show-inheritance:
