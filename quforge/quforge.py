@@ -163,6 +163,14 @@ def eye(dim, device='cpu', sparse=False):
 
     return M
 
+def zeros(m,n, device='cpu'):
+    M = torch.zeros((m, n), device=device)
+    return M
+
+def ones(m,n, device='cpu'):
+    M = torch.ones((m, n), device=device)
+    return M
+
 
 def kron(matrix1, matrix2, sparse=False):
     '''
@@ -344,27 +352,68 @@ class Circuit(nn.Module):
 
 
 class CustomGate(nn.Module):
-    def __init__(self, M, D=2, N=1, index=0, device='cpu'):
+    def __init__(self, M, dim=2, wires=1, index=0, device='cpu'):
         super(CustomGate, self).__init__()
         self.M = M.type(torch.complex64).to(device)
         self.index = index
-        self.D = D
-        self.N = N
+        self.dim = dim
+        self.wires = wires
 
     def forward(self, x):
-        U = torch.eye(1, dtype=torch.complex64, device=x.device)
-        for i in range(self.N):
+        U = eye(1)
+        for i in range(self.wires):
             if i == self.index:
                 U = torch.kron(U, self.M)
             else:
-                U = torch.kron(U, torch.eye(self.D, dtype=torch.complex64, device=x.device))
+                U = torch.kron(U, torch.eye(self.dim))
         
         return torch.matmul(U, x)
 
 
 class RX(nn.Module):
-    #j,k: indexes of the generalized Pauli matrices
-    #index: index of the qudit to apply the gate
+    r"""
+    Rotation-X (RX) Gate for qudits.
+
+    The RX gate represents a rotation around the X-axis of the Bloch sphere in a qudit system.
+
+    **Details:**
+
+    * **Matrix Representation:**
+    
+    .. math::
+          
+            RX(\theta) = 
+            \begin{pmatrix}
+            \cos(\frac{\theta}{2}) & -i\sin(\frac{\theta}{2}) \\
+            -i\sin(\frac{\theta}{2}) & \cos(\frac{\theta}{2})
+            \end{pmatrix}
+          
+    for a 2-level qudit (qubit). For higher dimensions, the gate affects only the j-th and k-th levels, leaving the others unchanged.
+
+    Args:
+        j (int): The first state to rotate between. Default is 0.
+        k (int): The second state to rotate between. Default is 1.
+        index (list of int): The indices of the qudits to which the gate is applied. Default is [0].
+        dim (int): The dimension of the qudit. Default is 2.
+        device (str): The device to perform the computations on. Default is 'cpu'.
+        angle (float or bool): The angle of rotation. If False, the angle is learned as a parameter. Default is False.
+        sparse (bool): Whether to use a sparse matrix representation. Default is False.
+
+    Attributes:
+        j (int): The first state involved in the rotation.
+        k (int): The second state involved in the rotation.
+        index (list of int): The indices of the qudits to which the gate is applied.
+        angle (torch.nn.Parameter): The angle of rotation (learned or set).
+        sparse (bool): Whether the matrix representation is sparse.
+        dim (int): The dimension of the qudit.
+
+    Examples:
+        >>> import quforge as qf
+        >>> gate = qf.RX(angle=1.57, index=[0])
+        >>> state = qf.State('0')
+        >>> result = gate(state)
+        >>> print(result)
+    """
 
     def __init__(self, j=0, k=1, index=[0], dim=2, device='cpu', angle=False, sparse=False):
         super(RX, self).__init__()
@@ -381,6 +430,18 @@ class RX(nn.Module):
             self.angle = nn.Parameter(angle*torch.ones(len(index), device=device))
 
     def forward(self, x, param=False):
+
+        """
+        Apply the RX gate to the qudit state.
+
+        Args:
+            x (torch.Tensor): The input state tensor of the qudit.
+            param (torch.Tensor or bool): If False, use the internal angle. If provided, use it as the rotation angle.
+
+        Returns:
+            torch.Tensor: The resulting state after applying the RX gate.
+        """
+        
         L = round(log(x.shape[0], self.dim))
         U = eye(1, device=x.device, sparse=self.sparse)
 
@@ -400,9 +461,15 @@ class RX(nn.Module):
                     values[3] = -1j*torch.sin(param[i]/2)
                 
                 if self.sparse is False:
-                    M = torch.zeros((self.dim, self.dim), device=x.device, dtype=torch.complex64)
+                    M = eye(dim=self.dim, device=x.device, sparse=self.sparse)
                     M.index_put_(tuple(indices), values)
                 elif self.sparse is True:
+                    for n in range(self.dim):
+                        new_tuple = torch.tensor([[n], [n]], device=indices.device)
+                        is_present = ((indices == new_tuple).all(dim=0)).any()
+                        if not is_present:
+                            indices = torch.cat((indices, new_tuple), dim=1)
+                            values = torch.cat((values, torch.tensor([1], dtype=values.dtype, device=values.device)))
                     M = torch.sparse_coo_tensor(indices, values, (self.dim, self.dim), device=x.device)
 
                 U = kron(U, M, sparse=self.sparse)
@@ -442,17 +509,23 @@ class RY(nn.Module):
                     values[0] = torch.cos(self.angle[i]/2)
                     values[1] = torch.cos(self.angle[i]/2)
                     values[2] = -torch.sin(self.angle[i]/2)
-                    values[3] = -torch.sin(self.angle[i]/2)
+                    values[3] = torch.sin(self.angle[i]/2)
                 else:
                     values[0] = torch.cos(param[i]/2)
                     values[1] = torch.cos(param[i]/2)
-                    values[2] = -torch.sin(self.angle[i]/2)
-                    values[3] = -torch.sin(self.angle[i]/2)
+                    values[2] = -torch.sin(param[i]/2)
+                    values[3] = torch.sin(param[i]/2)
                 
                 if self.sparse is False:
-                    M = torch.zeros((self.dim, self.dim), device=x.device, dtype=torch.complex64)
+                    M = eye(dim=self.dim, device=x.device, sparse=self.sparse)
                     M.index_put_(tuple(indices), values)
                 elif self.sparse is True:
+                    for n in range(self.dim):
+                        new_tuple = torch.tensor([[n], [n]], device=indices.device)
+                        is_present = ((indices == new_tuple).all(dim=0)).any()
+                        if not is_present:
+                            indices = torch.cat((indices, new_tuple), dim=1)
+                            values = torch.cat((values, torch.tensor([1], dtype=values.dtype, device=values.device)))
                     M = torch.sparse_coo_tensor(indices, values, (self.dim, self.dim), device=x.device)
 
                 U = kron(U, M, sparse=self.sparse)
@@ -498,11 +571,17 @@ class RZ(nn.Module):
                     values[self.j] = values[self.j]*(-self.j)
                     values = torch.cos(values) - 1j*torch.sin(values)
                 
-                M = eye(self.dim, sparse=self.sparse, device=x.device)
                 if self.sparse is False:
+                    M = eye(dim=self.dim, device=x.device, sparse=self.sparse)
                     M.index_put_(tuple(indices), values)
-                else:
-                    M = M + torch.sparse_coo_tensor(indices, values, (self.dim, self.dim), device=x.device)
+                elif self.sparse is True:
+                    for n in range(self.dim):
+                        new_tuple = torch.tensor([[n], [n]], device=indices.device)
+                        is_present = ((indices == new_tuple).all(dim=0)).any()
+                        if not is_present:
+                            indices = torch.cat((indices, new_tuple), dim=1)
+                            values = torch.cat((values, torch.tensor([1], dtype=values.dtype, device=values.device)))
+                    M = torch.sparse_coo_tensor(indices, values, (self.dim, self.dim), device=x.device)
 
                 U = kron(U, M, sparse=self.sparse)
             else:
@@ -545,10 +624,9 @@ class H(nn.Module):
         M (torch.Tensor): The matrix representation of the Hadamard gate.
 
     Examples:
-        >>> import torch
         >>> import quforge as qf
-        >>> gate = qf.HGate(D=2, index=[0])
-        >>> state = torch.tensor([1, 0], dtype=torch.complex64)
+        >>> gate = qf.H(dim=2, index=[0])
+        >>> state = qf.State('0')
         >>> result = gate(state)
         >>> print(result)
     """
@@ -565,7 +643,7 @@ class H(nn.Module):
         for i in range(1, dim):
             for j in range(1, dim):
                 M[i, j] = omega**(j*i)
-        M = M/(D**0.5)
+        M = M/(dim**0.5)
         if inverse:
             M = torch.conj(M).T.contiguous()
         self.register_buffer('M', M)
