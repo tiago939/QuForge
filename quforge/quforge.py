@@ -38,34 +38,28 @@ def density_matrix(state):
     return rho
 
 
-def partial_trace(state, index, dim):
-    #index: list of qudits to take the partial trace over
-    rho = density_matrix(state)
-    N = round(log(state.shape[0], dim))
-    L = list(itertools.product(range(dim), repeat=N-len(index)))
-    P = []
-    for l in L:
-        p = []
-        cnt = 0
-        for i in range(N):
-            if i in index:
-                p.append('h')
-            else:
-                p.append(l[cnt])
-                cnt += 1
-        P.append(p)
+def partial_trace(state, index=[0], dim=2, wires=1, device='cpu'):
+    da = dim**len(index)
+    db = dim**(wires - len(index))
 
-    U = 0
-    for p in P:
-        u = torch.eye(1, device=state.device)
-        for i in p:
-            if i == 'h':
-                u = torch.kron(u, torch.eye(dim, dtype=torch.complex64, device=state.device))
-            else:
-                u = torch.kron(u, State(dits=str(i), dim=dim).to(state.device))
-        U += torch.matmul(u.T, torch.matmul(rho, u))
+    # Create tensors for indices
+    all_indices = torch.arange(wires, device=device)
+    index_tensor = torch.tensor(index, device=device)
     
-    return U
+    # Create mask and complementary indices
+    complementary_indices = all_indices[~torch.isin(all_indices, index_tensor)]
+    
+    # Sort and concatenate indices
+    new_order = torch.cat((index_tensor.sort()[0], complementary_indices), dim=0)
+
+    # Transpose
+    reshaped_state = state.view((dim,) * wires).permute(*new_order).contiguous().view(da, db)
+    
+    # matmul and conjugation operations
+    state_conj = reshaped_state.conj()
+    rho = torch.matmul(reshaped_state, state_conj.transpose(0, 1))
+
+    return rho
 
 
 def projector(index, dim):
@@ -480,8 +474,49 @@ class RX(nn.Module):
 
 
 class RY(nn.Module):
-    #j,k: indexes of the generalized Pauli matrices
-    #index: index of the qudit to apply the gate
+    r"""
+    Rotation-Y (RY) Gate for qudits.
+
+    The RY gate represents a rotation around the Y-axis of the Bloch sphere in a qudit system.
+
+    **Details:**
+
+    * **Matrix Representation:**
+    
+    .. math::
+          
+            RY(\theta) = 
+            \begin{pmatrix}
+            \cos(\frac{\theta}{2}) & -\sin(\frac{\theta}{2}) \\
+            \sin(\frac{\theta}{2}) & \cos(\frac{\theta}{2})
+            \end{pmatrix}
+          
+    for a 2-level qudit (qubit). For higher dimensions, the gate affects only the j-th and k-th levels, leaving the others unchanged.
+
+    Args:
+        j (int): The first state to rotate between. Default is 0.
+        k (int): The second state to rotate between. Default is 1.
+        index (list of int): The indices of the qudits to which the gate is applied. Default is [0].
+        dim (int): The dimension of the qudit. Default is 2.
+        device (str): The device to perform the computations on. Default is 'cpu'.
+        angle (float or bool): The angle of rotation. If False, the angle is learned as a parameter. Default is False.
+        sparse (bool): Whether to use a sparse matrix representation. Default is False.
+
+    Attributes:
+        j (int): The first state involved in the rotation.
+        k (int): The second state involved in the rotation.
+        index (list of int): The indices of the qudits to which the gate is applied.
+        angle (torch.nn.Parameter): The angle of rotation (learned or set).
+        sparse (bool): Whether the matrix representation is sparse.
+        dim (int): The dimension of the qudit.
+
+    Examples:
+        >>> import quforge as qf
+        >>> gate = qf.RY(angle=1.57, index=[0])
+        >>> state = qf.State('0')
+        >>> result = gate(state)
+        >>> print(result)
+    """
 
     def __init__(self, j=0, k=1, index=[0], dim=2, device='cpu', angle=False, sparse=False):
         super(RY, self).__init__()
@@ -498,6 +533,16 @@ class RY(nn.Module):
             self.angle = nn.Parameter(angle*torch.ones(len(index), device=device))
 
     def forward(self, x, param=False):
+        """
+        Apply the RY gate to the qudit state.
+
+        Args:
+            x (torch.Tensor): The input state tensor of the qudit.
+            param (torch.Tensor or bool): If False, use the internal angle. If provided, use it as the rotation angle.
+
+        Returns:
+            torch.Tensor: The resulting state after applying the RY gate.
+        """
         L = round(log(x.shape[0], self.dim))
         U = eye(1, device=x.device, sparse=self.sparse)
 
@@ -535,10 +580,50 @@ class RY(nn.Module):
         return U @ x
 
 
+
 class RZ(nn.Module):
-    #j,k: indexes of the generalized Pauli matrices
-    #index: index of the qudit to apply the gate
-    #cutoff: cutoff of the infinite sum
+    r"""
+    Rotation-Z (RZ) Gate for qudits.
+
+    The RZ gate represents a rotation around the Z-axis of the Bloch sphere in a qudit system.
+
+    **Details:**
+
+    * **Matrix Representation:**
+    
+    .. math::
+          
+            RZ(\theta) = 
+            \begin{pmatrix}
+            e^{-i\theta/2} & 0 \\
+            0 & e^{i\theta/2}
+            \end{pmatrix}
+          
+    for a 2-level qudit (qubit). For higher dimensions, the gate affects only the j-th level, leaving the others unchanged.
+
+    Args:
+        j (int): The state to apply the phase rotation. Default is 1.
+        index (list of int): The indices of the qudits to which the gate is applied. Default is [0].
+        dim (int): The dimension of the qudit. Default is 2.
+        device (str): The device to perform the computations on. Default is 'cpu'.
+        angle (float or bool): The angle of rotation. If False, the angle is learned as a parameter. Default is False.
+        sparse (bool): Whether to use a sparse matrix representation. Default is False.
+
+    Attributes:
+        j (int): The state involved in the phase rotation.
+        index (list of int): The indices of the qudits to which the gate is applied.
+        angle (torch.nn.Parameter): The angle of rotation (learned or set).
+        sparse (bool): Whether the matrix representation is sparse.
+        dim (int): The dimension of the qudit.
+
+    Examples:
+        >>> import quforge as qf
+        >>> gate = qf.RZ(angle=1.57, index=[0])
+        >>> state = qf.State('0')
+        >>> result = gate(state)
+        >>> print(result)
+    """
+
     def __init__(self, j=1, index=[0], dim=2, device='cpu', angle=False, sparse=False):
         super(RZ, self).__init__()
 
@@ -553,23 +638,33 @@ class RZ(nn.Module):
             self.angle = nn.Parameter(angle*torch.ones(len(index), device=device))
 
     def forward(self, x, param=False):
+        """
+        Apply the RZ gate to the qudit state.
+
+        Args:
+            x (torch.Tensor): The input state tensor of the qudit.
+            param (torch.Tensor or bool): If False, use the internal angle. If provided, use it as the rotation angle.
+
+        Returns:
+            torch.Tensor: The resulting state after applying the RZ gate.
+        """
         L = round(log(x.shape[0], self.dim))
         U = eye(1, device=x.device, sparse=self.sparse)
+        
         for i in range(L):
             if i in self.index:
                 if param is False:
                     indices = torch.tensor([range(self.j + 1), range(self.j + 1)], device=x.device)
-                    angle = (self.angle[i] / 2)*np.sqrt(2 / (self.j * (self.j + 1)))
-                    values = angle*torch.ones(self.j + 1, dtype=torch.complex64, device=x.device)
-                    values[self.j] = values[self.j]*(-self.j)
-                    values = torch.cos(values) - 1j*torch.sin(values)
-
+                    angle = (self.angle[i] / 2) * np.sqrt(2 / (self.j * (self.j + 1)))
+                    values = angle * torch.ones(self.j + 1, dtype=torch.complex64, device=x.device)
+                    values[self.j] = values[self.j] * (-self.j)
+                    values = torch.cos(values) - 1j * torch.sin(values)
                 else:
                     indices = torch.tensor([range(self.j + 1), range(self.j + 1)], device=x.device)
-                    angle = (param[i] / 2)*np.sqrt(2 / (self.j * (self.j + 1)))
-                    values = angle*torch.ones(self.j + 1, dtype=torch.complex64, device=x.device)
-                    values[self.j] = values[self.j]*(-self.j)
-                    values = torch.cos(values) - 1j*torch.sin(values)
+                    angle = (param[i] / 2) * np.sqrt(2 / (self.j * (self.j + 1)))
+                    values = angle * torch.ones(self.j + 1, dtype=torch.complex64, device=x.device)
+                    values[self.j] = values[self.j] * (-self.j)
+                    values = torch.cos(values) - 1j * torch.sin(values)
                 
                 if self.sparse is False:
                     M = eye(dim=self.dim, device=x.device, sparse=self.sparse)
@@ -588,6 +683,7 @@ class RZ(nn.Module):
                 U = kron(U, eye(self.dim, sparse=self.sparse))
         
         return U @ x
+
 
 
 class H(nn.Module):
@@ -669,79 +765,177 @@ class H(nn.Module):
 
 
 class X(nn.Module):
-    #index: index of the qudit to apply the gate
+    r"""
+    Generalized Pauli-X (X) Gate for qudits.
+
+    The X gate represents a cyclic shift of the computational basis states in a qudit system, generalizing the Pauli-X gate from qubits to higher dimensions.
+
+    **Details:**
+
+    * **Matrix Representation:**
+    
+    For a qubit (2-level qudit), the Pauli-X gate is represented as:
+    
+    .. math::
+          
+            X = 
+            \begin{pmatrix}
+            0 & 1 \\
+            1 & 0
+            \end{pmatrix}
+    
+    For a higher dimensional qudit, the X gate shifts the basis states by \( s \), where \( s \) is a cyclic shift parameter.
+
+    Args:
+        s (int): The cyclic shift parameter for the qudit. Default is 1.
+        dim (int): The dimension of the qudit. Default is 2.
+        index (list of int): The indices of the qudits to which the gate is applied. Default is [0].
+        device (str): The device to perform the computations on. Default is 'cpu'.
+        inverse (bool): Whether to apply the inverse of the X gate. Default is False.
+
+    Attributes:
+        index (list of int): The indices of the qudits to which the gate is applied.
+        dim (int): The dimension of the qudit.
+        M (torch.Tensor): The matrix representation of the X gate.
+        inverse (bool): Whether the matrix representation is inverted.
+
+    Examples:
+        >>> import quforge as qf
+        >>> gate = qf.X(s=1, index=[0])
+        >>> state = qf.State('0')
+        >>> result = gate(state)
+        >>> print(result)
+    """
+
     def __init__(self, s=1, dim=2, index=[0], device='cpu', inverse=False):
         super(X, self).__init__()
 
         self.index = index
         self.dim = dim
+        
+        # Construct the matrix representation of the X gate
         M = torch.zeros((dim, dim), dtype=torch.complex64, device=device)
         for i in range(dim):
             for j in range(dim):
-                M[j][i] = torch.matmul(base(dim)[j].T, base(dim)[(i+s) % dim])
+                M[j][i] = torch.matmul(base(dim)[j].T, base(dim)[(i + s) % dim])
+        
+        # Apply the inverse if requested
         if inverse:
             M = torch.conj(M.T)
+        
+        # Register the matrix as a buffer so it can be used in the forward pass
         self.register_buffer('M', M)
             
 
     def forward(self, x):
-        L = round(log(x.shape[0], self.dim))
-        U = torch.eye(1, dtype=torch.complex64, device=x.device)
+        """
+        Apply the X gate to the qudit state.
+
+        Args:
+            x (torch.Tensor): The input state tensor of the qudit.
+
+        Returns:
+            torch.Tensor: The resulting state after applying the X gate.
+        """
+        L = round(log(x.shape[0], self.dim))  # Determine the number of qudits
+        U = torch.eye(1, dtype=torch.complex64, device=x.device)  # Identity matrix for the initial state
+        
+        # Apply the X gate to the specified qudits
         for i in range(L):
             if i in self.index:
                 U = torch.kron(U, self.M)
             else:
                 U = torch.kron(U, torch.eye(self.dim, dtype=torch.complex64, device=x.device))
+        
         return torch.matmul(U, x)
+
 
 
 class Z(nn.Module):
-    #index: index of the qudit to apply the gate
-    def __init__(self, dim=2, s=1, wires=[0], device='cpu', inverse=False):
+    r"""
+    Generalized Pauli-Z (Z) Gate for qudits.
+
+    The Z gate represents a phase shift of the computational basis states in a qudit system, generalizing the Pauli-Z gate from qubits to higher dimensions.
+
+    **Details:**
+
+    * **Matrix Representation:**
+    
+    For a qubit (2-level qudit), the Pauli-Z gate is represented as:
+    
+    .. math::
+          
+            Z = 
+            \begin{pmatrix}
+            1 & 0 \\
+            0 & -1
+            \end{pmatrix}
+    
+    For a higher-dimensional qudit, the Z gate applies a phase shift based on a complex exponential parameter \( \omega \).
+
+    .. math::
+    
+            Z_s = \text{diag}(1, \omega^s, \omega^{2s}, \ldots, \omega^{(D-1)s})
+    
+    where \( \omega = e^{2\pi i / D} \) and \( D \) is the dimension of the qudit.
+
+    Args:
+        dim (int): The dimension of the qudit. Default is 2.
+        s (int): The phase shift parameter for the qudit. Default is 1.
+        index (list of int): The indices of the qudits to which the gate is applied. Default is [0].
+        device (str): The device to perform the computations on. Default is 'cpu'.
+        inverse (bool): Whether to apply the inverse of the Z gate. Default is False.
+
+    Attributes:
+        index (list of int): The indices of the qudits to which the gate is applied.
+        dim (int): The dimension of the qudit.
+        M (torch.Tensor): The matrix representation of the Z gate.
+        inverse (bool): Whether the matrix representation is inverted.
+
+    Examples:
+        >>> import quforge as qf
+        >>> gate = qf.Z(dim=3, s=1, index=[0])
+        >>> state = qf.State('0')
+        >>> result = gate(state)
+        >>> print(result)
+    """
+
+    def __init__(self, dim=2, s=1, index=[0], device='cpu', inverse=False):
         super(Z, self).__init__()
 
-        omega = np.exp(2*1j*pi/D)
+        # Phase factor omega
+        omega = np.exp(2 * 1j * np.pi / dim)
 
         self.index = index
         self.dim = dim
-        M = torch.zeros((D, D), dtype=torch.complex64, device=device)
-        for i in range(D):
-            for j in range(D):
-                M[j][i] = (omega**(j*s))*delta(i,j)
+
+        # Construct the matrix representation of the Z gate
+        M = torch.zeros((dim, dim), dtype=torch.complex64, device=device)
+        for i in range(dim):
+            for j in range(dim):
+                M[j][i] = (omega ** (j * s)) * delta(i, j)  # Apply phase shift using delta function
+
+        # Apply inverse if requested
         if inverse:
             M = torch.conj(M.T)
+
+        # Register the matrix as a buffer so it can be used in the forward pass
         self.register_buffer('M', M)
         
     def forward(self, x):
-        L = round(log(x.shape[0], self.dim))
-        U = torch.eye(1, device=x.device, dtype=torch.complex64)
-        for i in range(L):
-            if i in self.index:
-                U = torch.kron(U, self.M)
-            else:
-                U = torch.kron(U, torch.eye(self.D, device=x.device,  dtype=torch.complex64))
+        """
+        Apply the Z gate to the qudit state.
+
+        Args:
+            x (torch.Tensor): The input state tensor of the qudit.
+
+        Returns:
+            torch.Tensor: The resulting state after applying the Z gate.
+        """
+        L = round(log(x.shape[0], self.dim))  # Determine the number of qudits
+        U = torch.eye(1, device=x.device, dtype=torch.complex64)  # Identity matrix for the initial state
         
-        return torch.matmul(U, x)
-
-    def gate(self):
-        return self.M
-
-
-class Y(nn.Module):
-    #index: index of the qudit to apply the gate
-    def __init__(self, s=1, dim=2, index=[0], device='cpu'):
-        super(Y, self).__init__()
-
-        self.index = index
-        self.dim = dim
-        X = XGate(s=s, device=device).M
-        Z = ZGate(device=device).M
-        M = torch.matmul(Z, X)/1j
-        self.register_buffer('M', M) 
-        
-    def forward(self, x):
-        L = round(log(x.shape[0], self.dim))
-        U = torch.eye(1, device=x.device, dtype=torch.complex64)
+        # Apply the Z gate to the specified qudits
         for i in range(L):
             if i in self.index:
                 U = torch.kron(U, self.M)
@@ -749,6 +943,101 @@ class Y(nn.Module):
                 U = torch.kron(U, torch.eye(self.dim, device=x.device, dtype=torch.complex64))
         
         return torch.matmul(U, x)
+
+    def gate(self):
+        """
+        Return the matrix representation of the Z gate.
+
+        Returns:
+            torch.Tensor: The Z gate matrix.
+        """
+        return self.M
+
+
+
+class Y(nn.Module):
+    r"""
+    Generalized Pauli-Y (Y) Gate for qudits.
+
+    The Y gate represents a combination of the X and Z gates, generalizing the Pauli-Y gate from qubits to higher dimensions.
+
+    **Details:**
+
+    * **Matrix Representation:**
+    
+    For a qubit (2-level qudit), the Pauli-Y gate is represented as:
+    
+    .. math::
+          
+            Y = 
+            \begin{pmatrix}
+            0 & -i \\
+            i & 0
+            \end{pmatrix}
+    
+    For a higher-dimensional qudit, the Y gate is defined as the product of the Z and X gates:
+
+    .. math::
+    
+            Y = \frac{1}{i} Z \cdot X
+
+    where \( Z \) and \( X \) are the generalized Pauli-Z and Pauli-X gates, respectively.
+
+    Args:
+        s (int): The cyclic shift parameter for the X gate. Default is 1.
+        dim (int): The dimension of the qudit. Default is 2.
+        index (list of int): The indices of the qudits to which the gate is applied. Default is [0].
+        device (str): The device to perform the computations on. Default is 'cpu'.
+
+    Attributes:
+        index (list of int): The indices of the qudits to which the gate is applied.
+        dim (int): The dimension of the qudit.
+        M (torch.Tensor): The matrix representation of the Y gate.
+
+    Examples:
+        >>> import quforge as qf
+        >>> gate = qf.Y(s=1, index=[0])
+        >>> state = qf.State('0')
+        >>> result = gate(state)
+        >>> print(result)
+    """
+
+    def __init__(self, s=1, dim=2, index=[0], device='cpu'):
+        super(Y, self).__init__()
+
+        self.index = index
+        self.dim = dim
+
+        # Generate X and Z gates and calculate Y as Z * X / 1j
+        X = XGate(s=s, device=device).M  # Generalized Pauli-X gate
+        Z = ZGate(device=device).M       # Generalized Pauli-Z gate
+        M = torch.matmul(Z, X) / 1j      # Y = Z * X / 1j
+
+        # Register the matrix as a buffer so it can be used in the forward pass
+        self.register_buffer('M', M)
+        
+    def forward(self, x):
+        """
+        Apply the Y gate to the qudit state.
+
+        Args:
+            x (torch.Tensor): The input state tensor of the qudit.
+
+        Returns:
+            torch.Tensor: The resulting state after applying the Y gate.
+        """
+        L = round(log(x.shape[0], self.dim))  # Determine the number of qudits
+        U = torch.eye(1, device=x.device, dtype=torch.complex64)  # Identity matrix for the initial state
+        
+        # Apply the Y gate to the specified qudits
+        for i in range(L):
+            if i in self.index:
+                U = torch.kron(U, self.M)
+            else:
+                U = torch.kron(U, torch.eye(self.dim, device=x.device, dtype=torch.complex64))
+        
+        return torch.matmul(U, x)
+
 
 
 class Xd(nn.Module):
@@ -807,49 +1096,163 @@ def CNOT_sparse(c, t, d, n, device='cpu'):
 
 
 class CNOT(nn.Module):
-    #index = [c, t] : c=control, t=target
-    #wires: total number of qudits in the circuit
+    r"""
+    Controlled-NOT (CNOT) Gate for qudits.
+
+    The CNOT gate is a controlled gate where the target qudit is flipped based on the state of the control qudit. For qudits, this gate is generalized to perform a cyclic shift of the target qudit based on the control qudit.
+
+    **Details:**
+
+    * **Matrix Representation:**
+    
+    For qubits (2-level qudits), the CNOT gate is represented as:
+    
+    .. math::
+          
+            CNOT = 
+            \begin{pmatrix}
+            1 & 0 & 0 & 0 \\
+            0 & 1 & 0 & 0 \\
+            0 & 0 & 0 & 1 \\
+            0 & 0 & 1 & 0
+            \end{pmatrix}
+    
+    For higher-dimensional qudits, the CNOT gate performs a modular addition of the control and target qudits.
+
+    Args:
+        index (list of int): The control and target qudit indices, where `index[0]` is the control qudit and `index[1]` is the target qudit. Default is [0, 1].
+        wires (int): The total number of qudits in the circuit. Default is 2.
+        dim (int): The dimension of the qudits. Default is 2.
+        device (str): The device to perform the computations on. Default is 'cpu'.
+        sparse (bool): Whether to use a sparse matrix representation. Default is False.
+        inverse (bool): Whether to apply the inverse of the CNOT gate. Default is False.
+
+    Attributes:
+        index (list of int): The indices of the control and target qudits.
+        dim (int): The dimension of the qudits.
+        U (torch.Tensor): The matrix representation of the CNOT gate.
+        inverse (bool): Whether the matrix representation is inverted.
+
+    Examples:
+        >>> import quforge as qf
+        >>> gate = qf.CNOT(index=[0, 1], wires=2)
+        >>> state = qf.State('00')
+        >>> result = gate(state)
+        >>> print(result)
+    """
+
     def __init__(self, index=[0,1], wires=2, dim=2, device='cpu', sparse=False, inverse=False):
         super(CNOT, self).__init__()
 
-        if sparse is False:   
+        # Dense matrix implementation
+        if sparse is False:
             L = torch.tensor(list(itertools.product(range(dim), repeat=wires)))
             l2ns = L.clone()
             l2ns[:, index[1]] = (l2ns[:, index[0]] + l2ns[:, index[1]]) % dim
             indices = torch.all(L[:, None, :] == l2ns[None, :, :], dim=2)
             U = torch.where(indices, torch.tensor([1.0 + 0j], dtype=torch.complex64), torch.tensor([0.0], dtype=torch.complex64)).to(device)
+        # Sparse matrix implementation
         else:
             U = CNOT_sparse(index[0], index[1], dim, wires, device=device)
 
+        # Apply inverse if requested
         if inverse:
             U = torch.conj(U).T.contiguous()
-        self.register_buffer('U', U)    
+
+        # Register the matrix as a buffer so it can be used in the forward pass
+        self.register_buffer('U', U)
         
     def forward(self, x):
+        """
+        Apply the CNOT gate to the qudit state.
+
+        Args:
+            x (torch.Tensor): The input state tensor of the qudits.
+
+        Returns:
+            torch.Tensor: The resulting state after applying the CNOT gate.
+        """
         return self.U @ x
+
 
 
 class SWAP(nn.Module):
-        #swap the state of two qudits
+    r"""
+    SWAP Gate for qudits.
+
+    The SWAP gate exchanges the states of two qudits, generalizing the SWAP gate for qubits to higher-dimensional qudits.
+
+    **Details:**
+
+    * **Matrix Representation:**
+    
+    For a qubit (2-level qudit) system, the SWAP gate exchanges the states of two qubits. The matrix representation is:
+    
+    .. math::
+          
+            SWAP = 
+            \begin{pmatrix}
+            1 & 0 & 0 & 0 \\
+            0 & 0 & 1 & 0 \\
+            0 & 1 & 0 & 0 \\
+            0 & 0 & 0 & 1
+            \end{pmatrix}
+    
+    For qudits, the SWAP gate exchanges the states of the two qudits specified by their indices.
+
+    Args:
+        index (list of int): The indices of the qudits to be swapped. Default is [0, 1].
+        dim (int): The dimension of the qudits. Default is 2.
+        wires (int): The total number of qudits in the circuit. Default is 2.
+        device (str): The device to perform the computations on. Default is 'cpu'.
+
+    Attributes:
+        index (list of int): The indices of the qudits to be swapped.
+        dim (int): The dimension of the qudits.
+        U (torch.Tensor): The matrix representation of the SWAP gate.
+
+    Examples:
+        >>> import quforge as qf
+        >>> gate = qf.SWAP(index=[0, 1], dim=2, wires=2)
+        >>> state = qf.State('01')
+        >>> result = gate(state)
+        >>> print(result)
+    """
+
     def __init__(self, index=[0,1], dim=2, wires=2, device='cpu'):
         super(SWAP, self).__init__()
 
-        c = index[0]
-        t = index[1]
-        D = dim**wires 
-        U = torch.zeros((D, D), device=device, dtype=torch.complex64)
-        for k in range (D):
-            localr = dec2den(k, wires, dim)
-            locall = localr.copy()
-            locall[c] = localr[t]
-            locall[t] = localr[c]
-            globall = den2dec(locall, dim)
-            U[globall, k] = 1
+        c = index[0]  # Control qudit index
+        t = index[1]  # Target qudit index
+        D = dim ** wires  # Total dimension of the system (dim^wires)
 
-        self.register_buffer('U', U) 
+        # Initialize the SWAP gate matrix as a zero matrix
+        U = torch.zeros((D, D), device=device, dtype=torch.complex64)
+
+        # Construct the SWAP matrix by swapping states of qudits
+        for k in range(D):
+            localr = dec2den(k, wires, dim)  # Convert from decimal to local qudit representation
+            locall = localr.copy()
+            locall[c] = localr[t]  # Swap qudits
+            locall[t] = localr[c]  # Swap qudits
+            globall = den2dec(locall, dim)  # Convert back to decimal
+            U[globall, k] = 1  # Set the matrix element to 1 for the swapped states
+
+        # Register the matrix as a buffer so it can be used in the forward pass
+        self.register_buffer('U', U)
 
     def forward(self, x):
+        """
+        Apply the SWAP gate to the qudit state.
+
+        Args:
+            x (torch.Tensor): The input state tensor of the qudits.
+
+        Returns:
+            torch.Tensor: The resulting state after applying the SWAP gate.
+        """
         return self.U @ x
+
 
 
 class CCNOT(nn.Module):
