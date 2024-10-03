@@ -275,8 +275,98 @@ class Sequential(nn.Sequential):
     def __init__(self, *args):
         super(Sequential, self).__init__(*args)
 
+
+class ReLU(nn.ReLU):
+    def __init__(self):
+        super(ReLU, self).__init__()
+    
+    def forward(self, x):
+        return torch.relu(x)
+
+class Sigmoid(nn.Sigmoid):
+    def __init__(self):
+        super(Sigmoid, self).__init__()
+    
+    def forward(self, x):
+        return torch.sigmoid(x)
+
+class Tanh(nn.Tanh):
+    def __init__(self):
+        super(Tanh, self).__init__()
+    
+    def forward(self, x):
+        return torch.tanh(x)
+
+class LeakyReLU(nn.LeakyReLU):
+    def __init__(self, negative_slope=0.01):
+        super(LeakyReLU, self).__init__(negative_slope=negative_slope)
+        self.negative_slope = negative_slope
+    
+    def forward(self, x):
+        return torch.nn.LeakyReLU(x, negative_slope=self.negative_slope)
+
+class Softmax(nn.Softmax):
+    def __init__(self, dim=-1):
+        super(Softmax, self).__init__()
+        self.dim = dim
+    
+    def forward(self, x):
+        return torch.softmax(x, dim=self.dim)
+
+
 class Circuit(nn.Module):
-    '''This class allows users to add gates dynamically'''
+    r"""
+    Quantum Circuit for qudits.
+
+    The Circuit class allows users to dynamically add various quantum gates to construct a quantum circuit for qudit systems. It supports a wide range of gates, including single, multi-qudit, and custom gates. The class provides methods to add specific gates as well as a general interface for adding custom gates.
+
+    **Details:**
+
+    This class facilitates the construction of quantum circuits by allowing the sequential addition of gates. The circuit is represented as a sequence of quantum operations (gates) that act on qudit states.
+
+    Args:
+        dim (int): The dimension of the qudits. Default is 2.
+        wires (int): The total number of qudits (wires) in the circuit. Default is 1.
+        device (str): The device to perform the computations on. Default is 'cpu'.
+        sparse (bool): Whether to use sparse matrix representations for the gates. Default is False.
+
+    Attributes:
+        dim (int): The dimension of the qudits.
+        wires (int): The number of qudits in the circuit.
+        device (str): The device for computations ('cpu' or 'cuda').
+        circuit (nn.Sequential): A sequential container for holding the quantum gates.
+        sparse (bool): Whether to use sparse matrices in the gates.
+
+    Methods:
+        add(module, **kwargs): Dynamically add a gate module to the circuit.
+        add_gate(gate, **kwargs): Add a specific gate instance to the circuit.
+        H(**kwargs): Add a Hadamard gate to the circuit.
+        RX(**kwargs): Add a rotation-X gate to the circuit.
+        RY(**kwargs): Add a rotation-Y gate to the circuit.
+        RZ(**kwargs): Add a rotation-Z gate to the circuit.
+        X(**kwargs): Add a Pauli-X gate to the circuit.
+        Y(**kwargs): Add a Pauli-Y gate to the circuit.
+        Z(**kwargs): Add a Pauli-Z gate to the circuit.
+        CNOT(**kwargs): Add a controlled-NOT gate to the circuit.
+        SWAP(**kwargs): Add a SWAP gate to the circuit.
+        CZ(**kwargs): Add a controlled-Z gate to the circuit.
+        CCNOT(**kwargs): Add a Toffoli (CCNOT) gate to the circuit.
+        MCX(**kwargs): Add a multi-controlled-X gate to the circuit.
+        CRX(**kwargs): Add a controlled rotation-X gate to the circuit.
+        CRY(**kwargs): Add a controlled rotation-Y gate to the circuit.
+        CRZ(**kwargs): Add a controlled rotation-Z gate to the circuit.
+        Custom(**kwargs): Add a custom gate to the circuit.
+
+    Examples:
+        >>> import quforge as qf
+        >>> circuit = qf.Circuit(dim=2, wires=3, device='cpu')
+        >>> circuit.H(index=[0])
+        >>> circuit.CNOT(index=[0, 1])
+        >>> state = qf.State('0-0-0')
+        >>> result = circuit(state)
+        >>> print(result)
+    """
+
     def __init__(self, dim=2, wires=1, device='cpu', sparse=False):
         super(Circuit, self).__init__()
 
@@ -287,10 +377,24 @@ class Circuit(nn.Module):
         self.sparse = sparse
 
     def add(self, module, **kwargs):
+        """
+        Add a gate module dynamically to the circuit.
+
+        Args:
+            module: The gate module to add.
+            **kwargs: Additional arguments for the gate.
+        """
         gate = module(D=self.dim, device=self.device, **kwargs)
         self.circuit.add_module(str(len(self.circuit)), gate)
 
     def add_gate(self, gate, **kwargs):
+        """
+        Add a pre-instantiated gate to the circuit.
+
+        Args:
+            gate: The gate instance to add.
+            **kwargs: Additional arguments for the gate.
+        """
         self.circuit.add_module(str(len(self.circuit)), gate)
 
     def H(self, **kwargs):
@@ -321,13 +425,13 @@ class Circuit(nn.Module):
         self.add_gate(SWAP(dim=self.dim, device=self.device, **kwargs))
 
     def CZ(self, **kwargs):
-        self.add_gate(CZ(dim=self.dim, wries=self.wires, device=self.device, **kwargs))
+        self.add_gate(CZ(dim=self.dim, wires=self.wires, device=self.device, **kwargs))
 
     def CCNOT(self, **kwargs):
         self.add_gate(CCNOT(dim=self.dim, device=self.device, **kwargs))
 
     def MCX(self, **kwargs):
-        self.add_gate(MCX(dim=self.dim, wries=self.wires, device=self.device, **kwargs))
+        self.add_gate(MCX(dim=self.dim, wires=self.wires, device=self.device, **kwargs))
 
     def CRX(self, **kwargs):
         self.add_gate(CRX(dim=self.dim, device=self.device, sparse=self.sparse, wires=self.wires, **kwargs))
@@ -342,10 +446,52 @@ class Circuit(nn.Module):
         self.add_gate(CustomGate(dim=self.dim, device=self.device, **kwargs))
 
     def forward(self, x):
+        """
+        Apply the circuit to the input qudit state.
+
+        Args:
+            x (torch.Tensor): The input qudit state.
+
+        Returns:
+            torch.Tensor: The resulting state after applying the circuit.
+        """
         return self.circuit(x)
 
 
+
 class CustomGate(nn.Module):
+    r"""
+    Custom Quantum Gate for qudits.
+
+    The CustomGate class allows users to define and apply a custom quantum gate to a specific qudit in a multi-qudit system. This gate can be any user-defined matrix, making it highly flexible for custom operations.
+
+    **Details:**
+
+    This gate applies a custom unitary matrix :math:`M` to the specified qudit while leaving other qudits unaffected by applying the identity operation to them.
+
+    Args:
+        M (torch.Tensor): The custom matrix to be applied as the gate.
+        dim (int): The dimension of the qudits. Default is 2.
+        wires (int): The total number of qudits (wires) in the circuit. Default is 1.
+        index (int): The index of the qudit to which the custom gate is applied. Default is 0.
+        device (str): The device to perform the computations on. Default is 'cpu'.
+
+    Attributes:
+        M (torch.Tensor): The custom matrix for the gate.
+        dim (int): The dimension of the qudits.
+        index (int): The index of the qudit on which the custom gate operates.
+        wires (int): The total number of qudits in the system.
+        device (str): The device for computations ('cpu' or 'cuda').
+
+    Examples:
+        >>> import quforge as qf
+        >>> custom_matrix = torch.tensor([[0, 1], [1, 0]])  # Example custom matrix
+        >>> gate = qf.CustomGate(M=custom_matrix, dim=2, index=0, wires=2)
+        >>> state = qf.State('00')
+        >>> result = gate(state)
+        >>> print(result)
+    """
+
     def __init__(self, M, dim=2, wires=1, index=0, device='cpu'):
         super(CustomGate, self).__init__()
         self.M = M.type(torch.complex64).to(device)
@@ -354,12 +500,21 @@ class CustomGate(nn.Module):
         self.wires = wires
 
     def forward(self, x):
-        U = eye(1)
+        """
+        Apply the custom gate to the qudit state.
+
+        Args:
+            x (torch.Tensor): The input qudit state.
+
+        Returns:
+            torch.Tensor: The resulting state after applying the custom gate.
+        """
+        U = torch.eye(1, dtype=torch.complex64, device=x.device)
         for i in range(self.wires):
             if i == self.index:
                 U = torch.kron(U, self.M)
             else:
-                U = torch.kron(U, torch.eye(self.dim))
+                U = torch.kron(U, torch.eye(self.dim, device=x.device))
         
         return torch.matmul(U, x)
 
@@ -1136,7 +1291,7 @@ class CNOT(nn.Module):
     Examples:
         >>> import quforge as qf
         >>> gate = qf.CNOT(index=[0, 1], wires=2)
-        >>> state = qf.State('00')
+        >>> state = qf.State('0-0')
         >>> result = gate(state)
         >>> print(result)
     """
@@ -1214,7 +1369,7 @@ class SWAP(nn.Module):
     Examples:
         >>> import quforge as qf
         >>> gate = qf.SWAP(index=[0, 1], dim=2, wires=2)
-        >>> state = qf.State('01')
+        >>> state = qf.State('0-1')
         >>> result = gate(state)
         >>> print(result)
     """
@@ -1256,14 +1411,49 @@ class SWAP(nn.Module):
 
 
 class CCNOT(nn.Module):
-    #CCNOT gate, also know as Toffoli gate
-    #index = [c1,c2,t] : c1=control 1, c2=control2, t=target
-    #wires: number of qudits
+    r"""
+    CCNOT (Toffoli) Gate for qudits.
+
+    The CCNOT gate, also known as the Toffoli gate, is a controlled-controlled NOT gate that flips the target qudit if both control qudits are in the specified states.
+
+    **Details:**
+
+    * **Matrix Representation:**
+    
+    This gate applies the following transformation:
+    
+    .. math::
+          
+            |c_1 c_2 t\rangle \to |c_1 c_2 (c_1 \cdot c_2 \oplus t)\rangle
+
+    where :math:`c_1` and :math:`c_2` are the control qudits, :math:`t` is the target qudit, and :math:`\oplus` is the XOR operation (modulo the dimension of the qudit, D).
+
+    Args:
+        index (list of int): The indices of the control and target qudits. The first two are the control qudits, and the third is the target qudit. Default is [0, 1, 2].
+        dim (int): The dimension of the qudits. Default is 2.
+        wires (int): The total number of qudits. Default is 3.
+        inverse (bool): Whether to apply the inverse of the CCNOT gate. Default is False.
+        device (str): The device to perform the computations on. Default is 'cpu'.
+
+    Attributes:
+        index (list of int): The indices of the control and target qudits.
+        device (str): The device to perform the computations on.
+        dim (int): The dimension of the qudits.
+        U (torch.Tensor): The matrix representation of the CCNOT gate.
+
+    Examples:
+        >>> import quforge as qf
+        >>> gate = qf.CCNOT(index=[0, 1, 2], dim=2, wires=3)
+        >>> state = qf.State('0-0-0')
+        >>> result = gate(state)
+        >>> print(result)
+    """
+
     def __init__(self, index=[0,1,2], dim=2, wires=3, inverse=False, device='cpu'):
         super(CCNOT, self).__init__()        
         L = torch.tensor(list(itertools.product(range(dim), repeat=wires))).to(device)
         l2ns = L.clone()
-        l2ns[:, index[2]] = (l2ns[:, index[0]]*l2ns[:, index[1]] + l2ns[:, index[2]]) % dim
+        l2ns[:, index[2]] = (l2ns[:, index[0]] * l2ns[:, index[1]] + l2ns[:, index[2]]) % dim
         indices = torch.all(L[:, None, :] == l2ns[None, :, :], dim=2)
         U = torch.where(indices, torch.tensor([1.0 + 0j], dtype=torch.complex64), torch.tensor([0.0], dtype=torch.complex64))        
         if inverse:
@@ -1271,12 +1461,56 @@ class CCNOT(nn.Module):
         self.register_buffer('U', U)
         
     def forward(self, x):
+        """
+        Apply the CCNOT gate to the qudit state.
+
+        Args:
+            x (torch.Tensor): The input state tensor of the qudits.
+
+        Returns:
+            torch.Tensor: The resulting state after applying the CCNOT gate.
+        """
         return torch.matmul(self.U, x)
 
 
+
 class MCX(nn.Module):
-    #multi-controlled cx gate
-    #wires: number of qudits
+    r"""
+    Multi-Controlled CX Gate for qudits.
+
+    The MCX gate applies a controlled-X operation where multiple control qudits are used to control a target qudit. This is a generalized version of the controlled-X gate for qudit systems.
+
+    **Details:**
+
+    * **Matrix Representation:**
+    
+    This gate applies the following transformation:
+    
+    .. math::
+          
+            |c_1 c_2 \dots c_n t\rangle \to |c_1 c_2 \dots c_n (c_1 \cdot c_2 \cdot \dots \cdot c_{n-1} \oplus t)\rangle
+
+    where :math:`c_1, c_2, \dots, c_{n-1}` are the control qudits, and :math:`t` is the target qudit. The XOR operation :math:`\oplus` is modulo the dimension of the qudit, D.
+
+    Args:
+        index (list of int): The indices of the control and target qudits. The last element is the target qudit, and the others are the control qudits. Default is [0, 1].
+        dim (int): The dimension of the qudits. Default is 2.
+        wires (int): The total number of qudits. Default is 2.
+        inverse (bool): Whether to apply the inverse of the MCX gate. Default is False.
+
+    Attributes:
+        index (list of int): The indices of the control and target qudits.
+        dim (int): The dimension of the qudits.
+        U (torch.Tensor): The matrix representation of the MCX gate.
+
+    Examples:
+        >>> import quforge as qf
+        >>> gate = qf.MCX(index=[0, 1], dim=2, wires=2)
+        >>> state = qf.State('0-0')
+        >>> result = gate(state)
+        >>> print(result)
+    """
+
     def __init__(self, index=[0, 1], dim=2, wires=2, inverse=False):
         super(MCX, self).__init__()        
         L = torch.tensor(list(itertools.product(range(dim), repeat=wires)))
@@ -1292,15 +1526,57 @@ class MCX(nn.Module):
         self.register_buffer('U', U)
         
     def forward(self, x):
+        """
+        Apply the MCX gate to the qudit state.
+
+        Args:
+            x (torch.Tensor): The input state tensor of the qudits.
+
+        Returns:
+            torch.Tensor: The resulting state after applying the MCX gate.
+        """
         return torch.matmul(self.U, x)
 
 
+
 class CZ(nn.Module):
-    '''
-    Controlled Z gate
-    index = [c, t] : c=control, t=target
-    '''
-    def __init__(self, index=[0,1], dim=2, wires=2, device='cpu'):
+    r"""
+    Controlled-Z Gate for qudits.
+
+    The CZ gate applies a Z operation on the target qudit if the control qudit is in a specific state. This is a generalized version of the controlled-Z gate for qudit systems.
+
+    **Details:**
+
+    * **Matrix Representation:**
+    
+    This gate applies the following transformation:
+    
+    .. math::
+          
+            |c t\rangle \to Z_t |c t\rangle \quad \text{if} \quad c = d
+
+    where :math:`c` is the control qudit, :math:`t` is the target qudit, and :math:`d` represents the state that triggers the Z gate.
+
+    Args:
+        index (list of int): The indices of the control and target qudits. Default is [0, 1].
+        dim (int): The dimension of the qudits. Default is 2.
+        wires (int): The total number of qudits. Default is 2.
+        device (str): The device to perform the computations on. Default is 'cpu'.
+
+    Attributes:
+        index (list of int): The indices of the control and target qudits.
+        dim (int): The dimension of the qudits.
+        U (torch.Tensor): The matrix representation of the CZ gate.
+
+    Examples:
+        >>> import quforge as qf
+        >>> gate = qf.CZ(index=[0, 1], dim=2, wires=2)
+        >>> state = qf.State('0-0')
+        >>> result = gate(state)
+        >>> print(result)
+    """
+
+    def __init__(self, index=[0, 1], dim=2, wires=2, device='cpu'):
         super(CZ, self).__init__()
 
         self.dim = dim
@@ -1323,16 +1599,62 @@ class CZ(nn.Module):
         self.register_buffer('U', U)
     
     def forward(self, x):
+        """
+        Apply the CZ gate to the qudit state.
+
+        Args:
+            x (torch.Tensor): The input state tensor of the qudits.
+
+        Returns:
+            torch.Tensor: The resulting state after applying the CZ gate.
+        """
         return self.U @ x
 
 
+
 class CRX(nn.Module):
-    '''
-    Controlled RX gate
-    index = [c, t] : c=control, t=target
-    N = total number of qudits in the circuit
-    '''
-    def __init__(self, index=[0,1], dim=2, N=2, j=0, k=1, device='cpu', sparse=False):
+    r"""
+    Controlled-RX Gate for qudits.
+
+    The CRX gate applies an RX (rotation-X) operation on the target qudit, conditioned on the state of the control qudit. This gate is generalized for qudit systems.
+
+    **Details:**
+
+    * **Matrix Representation:**
+    
+    This gate applies the following transformation:
+
+    .. math::
+          
+            |c t\rangle \to RX(\theta)_t |c t\rangle \quad \text{if} \quad c = d
+
+    where :math:`c` is the control qudit, :math:`t` is the target qudit, and :math:`RX(\theta)` represents a rotation around the X-axis by angle :math:`\theta`.
+
+    Args:
+        index (list of int): The indices of the control and target qudits. Default is [0, 1].
+        dim (int): The dimension of the qudits. Default is 2.
+        wires (int): The total number of qudits in the circuit. Default is 2.
+        j (int): The initial state of the target qudit. Default is 0.
+        k (int): The target state after the RX rotation. Default is 1.
+        device (str): The device to perform the computations on. Default is 'cpu'.
+        sparse (bool): Whether to use a sparse matrix representation. Default is False.
+
+    Attributes:
+        index (list of int): The indices of the control and target qudits.
+        dim (int): The dimension of the qudits.
+        angle (torch.Tensor): The angle of rotation, a learnable parameter.
+        wires (int): The total number of qudits in the circuit.
+        sparse (bool): Whether a sparse matrix representation is used.
+
+    Examples:
+        >>> import quforge as qf
+        >>> gate = qf.CRX(index=[0, 1], dim=2, wires=2, j=0, k=1)
+        >>> state = qf.State('0-0')
+        >>> result = gate(state)
+        >>> print(result)
+    """
+
+    def __init__(self, index=[0,1], dim=2, wires=2, j=0, k=1, device='cpu', sparse=False):
         super(CRX, self).__init__()
 
         self.index = index
@@ -1340,22 +1662,31 @@ class CRX(nn.Module):
         self.j = j
         self.k = k
         self.angle = nn.Parameter(pi*torch.randn(1, device=device))
-        self.N = N
+        self.wires = wires
         self.sparse = sparse
     
     def forward(self, x):
+        """
+        Apply the CRX gate to the qudit state.
+
+        Args:
+            x (torch.Tensor): The input state tensor of the qudits.
+
+        Returns:
+            torch.Tensor: The resulting state after applying the CRX gate.
+        """
         c = self.index[0]
         t = self.index[1]
         
-        D = self.dim**self.N
+        D = self.dim**self.wires
         U = torch.zeros((D, D), dtype=torch.complex64, device=x.device)
         Dl = D // self.dim
         indices_list = []
         values_list = []
 
-        for m in range (0, Dl):
-            local = dec2den(m, self.N-1, self.dim)
-            if self.N == 2:
+        for m in range(Dl):
+            local = dec2den(m, self.wires-1, self.dim)
+            if self.wires == 2:
                 angle = (local[0]*self.angle)/2
             else:
                 angle = (local[c]*self.angle)/2
@@ -1375,11 +1706,11 @@ class CRX(nn.Module):
             values[2] = -1j*torch.sin(angle)
             values[3] = -1j*torch.sin(angle)
 
-            for l in range(0, self.dim):
+            for l in range(self.dim):
                 if l != self.j-1 and l != self.k-1:
                     listl = local.copy()
-                    listl.insert(t,l)
-                    intl = den2dec(listl, self.dim) 
+                    listl.insert(t, l)
+                    intl = den2dec(listl, self.dim)
                     new_index = torch.tensor([[intl]])
                     new_value = torch.tensor([1.0])
                     indices = torch.cat((indices, new_index.expand(2, -1)), dim=1)
@@ -1403,12 +1734,48 @@ class CRX(nn.Module):
 
 
 class CRY(nn.Module):
-    '''
-    Controlled RX gate
-    index = [c, t] : c=control, t=target
-    N = total number of qudits in the circuit
-    '''
-    def __init__(self, index=[0,1], dim=2, N=2, j=0, k=1, device='cpu', sparse=False):
+    r"""
+    Controlled-RY Gate for qudits.
+
+    The CRY gate applies an RY (rotation-Y) operation on the target qudit, conditioned on the state of the control qudit. This gate is generalized for qudit systems.
+
+    **Details:**
+
+    * **Matrix Representation:**
+    
+    This gate applies the following transformation:
+
+    .. math::
+          
+            |c t\rangle \to RY(\theta)_t |c t\rangle \quad \text{if} \quad c = d
+
+    where :math:`c` is the control qudit, :math:`t` is the target qudit, and :math:`RY(\theta)` represents a rotation around the Y-axis by angle :math:`\theta`.
+
+    Args:
+        index (list of int): The indices of the control and target qudits. Default is [0, 1].
+        dim (int): The dimension of the qudits. Default is 2.
+        wires (int): The total number of qudits in the circuit. Default is 2.
+        j (int): The initial state of the target qudit. Default is 0.
+        k (int): The target state after the RY rotation. Default is 1.
+        device (str): The device to perform the computations on. Default is 'cpu'.
+        sparse (bool): Whether to use a sparse matrix representation. Default is False.
+
+    Attributes:
+        index (list of int): The indices of the control and target qudits.
+        dim (int): The dimension of the qudits.
+        angle (torch.Tensor): The angle of rotation, a learnable parameter.
+        wires (int): The total number of qudits in the circuit.
+        sparse (bool): Whether a sparse matrix representation is used.
+
+    Examples:
+        >>> import quforge as qf
+        >>> gate = qf.CRY(index=[0, 1], dim=2, wires=2, j=0, k=1)
+        >>> state = qf.State('0-0')
+        >>> result = gate(state)
+        >>> print(result)
+    """
+
+    def __init__(self, index=[0,1], dim=2, wires=2, j=0, k=1, device='cpu', sparse=False):
         super(CRY, self).__init__()
 
         self.index = index
@@ -1416,21 +1783,30 @@ class CRY(nn.Module):
         self.j = j
         self.k = k
         self.angle = nn.Parameter(pi*torch.randn(1, device=device))
-        self.N = N
+        self.wires = wires
         self.sparse = sparse
     
     def forward(self, x):
+        """
+        Apply the CRY gate to the qudit state.
+
+        Args:
+            x (torch.Tensor): The input state tensor of the qudits.
+
+        Returns:
+            torch.Tensor: The resulting state after applying the CRY gate.
+        """
         c = self.index[0]
         t = self.index[1]
         
-        D = self.dim**self.N
+        D = self.dim**self.wires
         Dl = D // self.dim
         indices_list = []
         values_list = []
 
-        for m in range (0, Dl):
-            local = dec2den(m, self.N-1, self.dim)
-            if self.N == 2:
+        for m in range(Dl):
+            local = dec2den(m, self.wires-1, self.dim)
+            if self.wires == 2:
                 angle = (local[0]*self.angle)/2
             else:
                 angle = (local[c]*self.angle)/2
@@ -1450,11 +1826,11 @@ class CRY(nn.Module):
             values[2] = -torch.sin(angle)
             values[3] = -torch.sin(angle)
 
-            for l in range(0, self.dim):
+            for l in range(self.dim):
                 if l != self.j-1 and l != self.k-1:
                     listl = local.copy()
-                    listl.insert(t,l)
-                    intl = den2dec(listl, self.dim) 
+                    listl.insert(t, l)
+                    intl = den2dec(listl, self.dim)
                     new_index = torch.tensor([[intl]])
                     new_value = torch.tensor([1.0])
                     indices = torch.cat((indices, new_index.expand(2, -1)), dim=1)
@@ -1478,57 +1854,100 @@ class CRY(nn.Module):
 
 
 class CRZ(nn.Module):
-    '''
-    Controlled RX gate
-    index = [c, t] : c=control, t=target
-    N = total number of qudits in the circuit
-    '''
-    def __init__(self, index=[0, 1], dim=2, N=2, j=1, device='cpu', sparse=False):
+    r"""
+    Controlled-RZ Gate for qudits.
+
+    The CRZ gate applies an RZ (rotation-Z) operation on the target qudit, conditioned on the state of the control qudit. This gate is generalized for qudit systems.
+
+    **Details:**
+
+    * **Matrix Representation:**
+    
+    This gate applies the following transformation:
+
+    .. math::
+          
+            |c t\rangle \to RZ(\theta)_t |c t\rangle \quad \text{if} \quad c = d
+
+    where :math:`c` is the control qudit, :math:`t` is the target qudit, and :math:`RZ(\theta)` represents a rotation around the Z-axis by angle :math:`\theta`.
+
+    Args:
+        index (list of int): The indices of the control and target qudits. Default is [0, 1].
+        dim (int): The dimension of the qudits. Default is 2.
+        wires (int): The total number of qudits in the circuit. Default is 2.
+        j (int): The rotation state threshold for the Z operation. Default is 1.
+        device (str): The device to perform the computations on. Default is 'cpu'.
+        sparse (bool): Whether to use a sparse matrix representation. Default is False.
+
+    Attributes:
+        index (list of int): The indices of the control and target qudits.
+        dim (int): The dimension of the qudits.
+        angle (torch.Tensor): The angle of rotation, a learnable parameter.
+        wires (int): The total number of qudits in the circuit.
+        sparse (bool): Whether a sparse matrix representation is used.
+
+    Examples:
+        >>> import quforge as qf
+        >>> gate = qf.CRZ(index=[0, 1], dim=2, wires=2, j=1)
+        >>> state = qf.State('0-0')
+        >>> result = gate(state)
+        >>> print(result)
+    """
+
+    def __init__(self, index=[0, 1], dim=2, wires=2, j=1, device='cpu', sparse=False):
         super(CRZ, self).__init__()
 
         self.index = index
         self.dim = dim
         self.j = j
         self.angle = nn.Parameter(pi*torch.randn(1, device=device))
-        self.N = N
+        self.wires = wires
         self.sparse = sparse
     
     def forward(self, x):
+        """
+        Apply the CRZ gate to the qudit state.
+
+        Args:
+            x (torch.Tensor): The input state tensor of the qudits.
+
+        Returns:
+            torch.Tensor: The resulting state after applying the CRZ gate.
+        """
         c = self.index[0]
         t = self.index[1]
         
-        D = self.dim**self.N
+        D = self.dim**self.wires
         Dl = D // self.dim
         indices_list = []
         values_list = []
 
         indices = []
         values = []
-        for m in range (0, Dl):
-            local = dec2den(m, self.N-1, self.dim)
-            if self.N == 2:
+        for m in range(Dl):
+            local = dec2den(m, self.wires-1, self.dim)
+            if self.wires == 2:
                 loc = local[0]
             else:
                 loc = local[c]
-            angle = ((loc*self.angle)/2)*np.sqrt(2/(self.j*(self.j+1)))
+            angle = ((loc * self.angle) / 2) * np.sqrt(2 / (self.j * (self.j + 1)))
 
-            for k in range(0, self.dim):
+            for k in range(self.dim):
                 listk = local.copy()
-                listk.insert(t,k) # insert k in position t of the list
-                intk = den2dec(listk, self.dim) # integer for the k state
+                listk.insert(t, k)  # insert k in position t of the list
+                intk = den2dec(listk, self.dim)  # integer for the k state
                 if k < self.j:
                     indices.append([intk, intk])
-                    values.append(torch.cos(angle) - 1j*torch.sin(angle))
+                    values.append(torch.cos(angle) - 1j * torch.sin(angle))
                 elif k == self.j:
                     angle = self.j * angle
                     indices.append([intk, intk])
-                    values.append(torch.cos(angle) + 1j*torch.sin(angle))
+                    values.append(torch.cos(angle) + 1j * torch.sin(angle))
                 elif k > self.j:
                     indices.append([intk, intk])
                     values.append(1.0)
 
-        indices = torch.tensor(indices)
-        indices = indices.T
+        indices = torch.tensor(indices).T
         values = torch.tensor(values)
         mask = (indices[0] >= 0) & (indices[1] >= 0)
         indices = indices[:, mask]
@@ -1541,4 +1960,3 @@ class CRZ(nn.Module):
             U = torch.sparse_coo_tensor(indices, values, (D, D), device=x.device)
 
         return U @ x
-

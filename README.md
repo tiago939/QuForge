@@ -3,17 +3,22 @@
 # QuForge v0.1
 Quantum simulator of qudits
 
-The documentation of the library is a work in progress, you can check it at [quforge.readthedocs.io](https://quforge.readthedocs.io).
+You can check the documentation (WIP) at [quforge.readthedocs.io](https://quforge.readthedocs.io).
 
-We are working on optimizing the library and adding new gates.
+# Installation
 
-Please reach us if you have any question!
+```bash
+pip install quforge
+```
+
+We are continuously working on optimizing the library.
+Please reach us if you have any suggestion or question!
 
 
 ## BibTeX
 
 ```
-@misc{farias2024quforge,
+@misc{2024quforge,
       title={QuForge: A Library for Qudits Simulation},
       author={Tiago de Souza Farias and Lucas Friedrich and Jonas Maziero},
       year={2024},
