@@ -1,6 +1,6 @@
 ![QuForge Logo](https://github.com/tiago939/QuForge/blob/main/logo.png)
 
-# QuForge v0.1
+# QuForge v0.1.12
 Quantum simulator of qudits
 
 You can check the documentation (WIP) at [quforge.readthedocs.io](https://quforge.readthedocs.io).

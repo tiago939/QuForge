@@ -38,13 +38,13 @@ def density_matrix(state):
     return rho
 
 
-def partial_trace(state, index=[0], dim=2, wires=1, device='cpu'):
+def partial_trace(state, index=[0], dim=2, wires=1):
     da = dim**len(index)
     db = dim**(wires - len(index))
 
     # Create tensors for indices
-    all_indices = torch.arange(wires, device=device)
-    index_tensor = torch.tensor(index, device=device)
+    all_indices = torch.arange(wires, device=state.device)
+    index_tensor = torch.tensor(index, device=state.device)
     
     # Create mask and complementary indices
     complementary_indices = all_indices[~torch.isin(all_indices, index_tensor)]
@@ -69,7 +69,7 @@ def projector(index, dim):
     return P
 
 
-def measure(state=None, index=[0], shots=1, dim=2):
+def measure(state=None, index=[0], shots=1, dim=2, wires=1):
     #input:
         #state: state to measure
         #index: list of qudits to measure
@@ -77,7 +77,7 @@ def measure(state=None, index=[0], shots=1, dim=2):
     #output:
         #histogram: histogram of the measurements
         #p: distribution probability
-    rho = partial_trace(state, index, dim)
+    rho = partial_trace(state, index, dim, wires)
     p = abs(torch.diag(rho))
     p = p/torch.sum(p)
 
@@ -358,7 +358,7 @@ class Circuit(nn.Module):
         Custom(**kwargs): Add a custom gate to the circuit.
 
     Examples:
-        >>> import quforge as qf
+        >>> import quforge.quforge as qf
         >>> circuit = qf.Circuit(dim=2, wires=3, device='cpu')
         >>> circuit.H(index=[0])
         >>> circuit.CNOT(index=[0, 1])
@@ -484,7 +484,7 @@ class CustomGate(nn.Module):
         device (str): The device for computations ('cpu' or 'cuda').
 
     Examples:
-        >>> import quforge as qf
+        >>> import quforge.quforge as qf
         >>> custom_matrix = torch.tensor([[0, 1], [1, 0]])  # Example custom matrix
         >>> gate = qf.CustomGate(M=custom_matrix, dim=2, index=0, wires=2)
         >>> state = qf.State('00')
@@ -557,7 +557,7 @@ class RX(nn.Module):
         dim (int): The dimension of the qudit.
 
     Examples:
-        >>> import quforge as qf
+        >>> import quforge.quforge as qf
         >>> gate = qf.RX(angle=1.57, index=[0])
         >>> state = qf.State('0')
         >>> result = gate(state)
@@ -666,7 +666,7 @@ class RY(nn.Module):
         dim (int): The dimension of the qudit.
 
     Examples:
-        >>> import quforge as qf
+        >>> import quforge.quforge as qf
         >>> gate = qf.RY(angle=1.57, index=[0])
         >>> state = qf.State('0')
         >>> result = gate(state)
@@ -772,7 +772,7 @@ class RZ(nn.Module):
         dim (int): The dimension of the qudit.
 
     Examples:
-        >>> import quforge as qf
+        >>> import quforge.quforge as qf
         >>> gate = qf.RZ(angle=1.57, index=[0])
         >>> state = qf.State('0')
         >>> result = gate(state)
@@ -875,7 +875,7 @@ class H(nn.Module):
         M (torch.Tensor): The matrix representation of the Hadamard gate.
 
     Examples:
-        >>> import quforge as qf
+        >>> import quforge.quforge as qf
         >>> gate = qf.H(dim=2, index=[0])
         >>> state = qf.State('0')
         >>> result = gate(state)
@@ -955,7 +955,7 @@ class X(nn.Module):
         inverse (bool): Whether the matrix representation is inverted.
 
     Examples:
-        >>> import quforge as qf
+        >>> import quforge.quforge as qf
         >>> gate = qf.X(s=1, index=[0])
         >>> state = qf.State('0')
         >>> result = gate(state)
@@ -1048,7 +1048,7 @@ class Z(nn.Module):
         inverse (bool): Whether the matrix representation is inverted.
 
     Examples:
-        >>> import quforge as qf
+        >>> import quforge.quforge as qf
         >>> gate = qf.Z(dim=3, s=1, index=[0])
         >>> state = qf.State('0')
         >>> result = gate(state)
@@ -1150,7 +1150,7 @@ class Y(nn.Module):
         M (torch.Tensor): The matrix representation of the Y gate.
 
     Examples:
-        >>> import quforge as qf
+        >>> import quforge.quforge as qf
         >>> gate = qf.Y(s=1, index=[0])
         >>> state = qf.State('0')
         >>> result = gate(state)
@@ -1289,7 +1289,7 @@ class CNOT(nn.Module):
         inverse (bool): Whether the matrix representation is inverted.
 
     Examples:
-        >>> import quforge as qf
+        >>> import quforge.quforge as qf
         >>> gate = qf.CNOT(index=[0, 1], wires=2)
         >>> state = qf.State('0-0')
         >>> result = gate(state)
@@ -1367,7 +1367,7 @@ class SWAP(nn.Module):
         U (torch.Tensor): The matrix representation of the SWAP gate.
 
     Examples:
-        >>> import quforge as qf
+        >>> import quforge.quforge as qf
         >>> gate = qf.SWAP(index=[0, 1], dim=2, wires=2)
         >>> state = qf.State('0-1')
         >>> result = gate(state)
@@ -1442,7 +1442,7 @@ class CCNOT(nn.Module):
         U (torch.Tensor): The matrix representation of the CCNOT gate.
 
     Examples:
-        >>> import quforge as qf
+        >>> import quforge.quforge as qf
         >>> gate = qf.CCNOT(index=[0, 1, 2], dim=2, wires=3)
         >>> state = qf.State('0-0-0')
         >>> result = gate(state)
@@ -1504,7 +1504,7 @@ class MCX(nn.Module):
         U (torch.Tensor): The matrix representation of the MCX gate.
 
     Examples:
-        >>> import quforge as qf
+        >>> import quforge.quforge as qf
         >>> gate = qf.MCX(index=[0, 1], dim=2, wires=2)
         >>> state = qf.State('0-0')
         >>> result = gate(state)
@@ -1569,7 +1569,7 @@ class CZ(nn.Module):
         U (torch.Tensor): The matrix representation of the CZ gate.
 
     Examples:
-        >>> import quforge as qf
+        >>> import quforge.quforge as qf
         >>> gate = qf.CZ(index=[0, 1], dim=2, wires=2)
         >>> state = qf.State('0-0')
         >>> result = gate(state)
@@ -1647,7 +1647,7 @@ class CRX(nn.Module):
         sparse (bool): Whether a sparse matrix representation is used.
 
     Examples:
-        >>> import quforge as qf
+        >>> import quforge.quforge as qf
         >>> gate = qf.CRX(index=[0, 1], dim=2, wires=2, j=0, k=1)
         >>> state = qf.State('0-0')
         >>> result = gate(state)
@@ -1768,7 +1768,7 @@ class CRY(nn.Module):
         sparse (bool): Whether a sparse matrix representation is used.
 
     Examples:
-        >>> import quforge as qf
+        >>> import quforge.quforge as qf
         >>> gate = qf.CRY(index=[0, 1], dim=2, wires=2, j=0, k=1)
         >>> state = qf.State('0-0')
         >>> result = gate(state)
@@ -1887,7 +1887,7 @@ class CRZ(nn.Module):
         sparse (bool): Whether a sparse matrix representation is used.
 
     Examples:
-        >>> import quforge as qf
+        >>> import quforge.quforge as qf
         >>> gate = qf.CRZ(index=[0, 1], dim=2, wires=2, j=1)
         >>> state = qf.State('0-0')
         >>> result = gate(state)
