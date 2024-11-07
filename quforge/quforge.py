@@ -442,6 +442,9 @@ class Circuit(nn.Module):
     def CRZ(self, **kwargs):
         self.add_gate(CRZ(dim=self.dim, device=self.device, sparse=self.sparse, wires=self.wires, **kwargs))
 
+    def U(self, **kwargs):
+        self.add_gate(U(dim=self.dim, device=self.device, wires=self.wires, **kwargs))
+
     def Custom(self, **kwargs):
         self.add_gate(CustomGate(dim=self.dim, device=self.device, **kwargs))
 
