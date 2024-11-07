@@ -401,13 +401,13 @@ class Circuit(nn.Module):
         self.add_gate(H(dim=self.dim, device=self.device, **kwargs))
 
     def RX(self, **kwargs):
-        self.add_gate(RX(dim=self.dim, device=self.device, sparse=self.sparse, **kwargs))
+        self.add_gate(RX(dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs))
 
     def RY(self, **kwargs):
-        self.add_gate(RY(dim=self.dim, device=self.device, sparse=self.sparse, **kwargs))
+        self.add_gate(RY(dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs))
 
     def RZ(self, **kwargs):
-        self.add_gate(RZ(dim=self.dim, device=self.device, sparse=self.sparse, **kwargs))
+        self.add_gate(RZ(dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs))
 
     def X(self, **kwargs):
         self.add_gate(X(dim=self.dim, device=self.device, **kwargs))
@@ -544,6 +544,7 @@ class RX(nn.Module):
         k (int): The second state to rotate between. Default is 1.
         index (list of int): The indices of the qudits to which the gate is applied. Default is [0].
         dim (int): The dimension of the qudit. Default is 2.
+        wires (int): The total number of qudits in the circuit. Default is 1.
         device (str): The device to perform the computations on. Default is 'cpu'.
         angle (float or bool): The angle of rotation. If False, the angle is learned as a parameter. Default is False.
         sparse (bool): Whether to use a sparse matrix representation. Default is False.
@@ -564,19 +565,20 @@ class RX(nn.Module):
         >>> print(result)
     """
 
-    def __init__(self, j=0, k=1, index=[0], dim=2, device='cpu', angle=False, sparse=False):
+    def __init__(self, j=0, k=1, index=[0], dim=2, wires=1, device='cpu', angle=False, sparse=False):
         super(RX, self).__init__()
 
         self.dim = dim
+        self.wires = wires
         self.index = index
         self.j = j 
         self.k = k
         self.sparse = sparse
 
         if angle is False:
-            self.angle = nn.Parameter(torch.randn(len(index), device=device))
+            self.angle = nn.Parameter(torch.randn(wires, device=device))
         else:
-            self.angle = nn.Parameter(angle*torch.ones(len(index), device=device))
+            self.angle = nn.Parameter(angle*torch.ones(wires, device=device))
 
     def forward(self, x, param=False):
 
@@ -653,6 +655,7 @@ class RY(nn.Module):
         k (int): The second state to rotate between. Default is 1.
         index (list of int): The indices of the qudits to which the gate is applied. Default is [0].
         dim (int): The dimension of the qudit. Default is 2.
+        wires (int): The total number of qudits in the circuit. Default is 1.
         device (str): The device to perform the computations on. Default is 'cpu'.
         angle (float or bool): The angle of rotation. If False, the angle is learned as a parameter. Default is False.
         sparse (bool): Whether to use a sparse matrix representation. Default is False.
@@ -673,19 +676,20 @@ class RY(nn.Module):
         >>> print(result)
     """
 
-    def __init__(self, j=0, k=1, index=[0], dim=2, device='cpu', angle=False, sparse=False):
+    def __init__(self, j=0, k=1, index=[0], dim=2, wires=1, device='cpu', angle=False, sparse=False):
         super(RY, self).__init__()
 
         self.dim = dim
+        self.wires = wires
         self.index = index
         self.sparse = sparse
         self.j = j 
         self.k = k
 
         if angle is False:
-            self.angle = nn.Parameter(torch.randn(len(index), device=device))
+            self.angle = nn.Parameter(torch.randn(wires, device=device))
         else:
-            self.angle = nn.Parameter(angle*torch.ones(len(index), device=device))
+            self.angle = nn.Parameter(angle*torch.ones(wires, device=device))
 
     def forward(self, x, param=False):
         """
@@ -760,6 +764,7 @@ class RZ(nn.Module):
         j (int): The state to apply the phase rotation. Default is 1.
         index (list of int): The indices of the qudits to which the gate is applied. Default is [0].
         dim (int): The dimension of the qudit. Default is 2.
+        wires (int): The total number of qudits in the circuit. Default is 1.
         device (str): The device to perform the computations on. Default is 'cpu'.
         angle (float or bool): The angle of rotation. If False, the angle is learned as a parameter. Default is False.
         sparse (bool): Whether to use a sparse matrix representation. Default is False.
@@ -779,18 +784,19 @@ class RZ(nn.Module):
         >>> print(result)
     """
 
-    def __init__(self, j=1, index=[0], dim=2, device='cpu', angle=False, sparse=False):
+    def __init__(self, j=1, index=[0], dim=2, wires=1, device='cpu', angle=False, sparse=False):
         super(RZ, self).__init__()
 
         self.dim = dim
+        self.wires = wires
         self.index = index
         self.j = j
         self.sparse = sparse
 
         if angle is False:
-            self.angle = nn.Parameter(torch.randn(len(index), device=device))
+            self.angle = nn.Parameter(torch.randn(wires, device=device))
         else:
-            self.angle = nn.Parameter(angle*torch.ones(len(index), device=device))
+            self.angle = nn.Parameter(angle*torch.ones(wires, device=device))
 
     def forward(self, x, param=False):
         """
@@ -1958,5 +1964,20 @@ class CRZ(nn.Module):
             U.index_put_(tuple(indices), values)
         else:
             U = torch.sparse_coo_tensor(indices, values, (D, D), device=x.device)
+
+        return U @ x
+
+class U(nn.Module):
+
+    def __init__(self, dim=2, wires=1, device='cpu'):
+        super(U, self).__init__()
+
+        self.counter = 0
+        self.U = nn.Parameter(eye(dim=dim**wires, sparse=False, device=device) + torch.randn((dim**wires, dim**wires), device=device) + 1j*torch.randn((dim**wires, dim**wires), device=device))
+    
+    def forward(self, x):
+
+        U = self.U - torch.conj(self.U.T)
+        U = torch.matrix_exp(U)
 
         return U @ x
