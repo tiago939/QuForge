@@ -41,11 +41,11 @@ import quforge.quforge as qf
 circuit = qf.Circuit(dim=2, wires=2)
 
 # Add gates to the circuit
-circuit.H(wires=0)           # Hadamard gate on wire 0
-circuit.CNOT(wires=[0, 1])   # CNOT gate with control wire 0 and target wire 1
+circuit.H(index=[0])           # Hadamard gate on wire 0
+circuit.CNOT(index=[0, 1])   # CNOT gate with control wire 0 and target wire 1
 
 # Initialize the state
-state = qf.State('0-0')
+state = qf.State('0-0', dim=2)
 
 # Execute the circuit
 result = circuit(state)
