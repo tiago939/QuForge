@@ -245,6 +245,26 @@ def argmax(x):
 def mean(x):
     return torch.mean(x)
 
+def dec2den(j,N,d):
+    # convert from decimal to denary representation
+    den = [0 for k in range(0,N)]
+    jv = j
+    for k in range(0,N):
+        if jv >= d**(N-1-k):
+            den[k] = jv//(d**(N-1-k))
+            jv = jv - den[k]*d**(N-1-k)
+    return den
+
+def den2dec(local,d):
+    # convert from denary to decimal representation
+    # local = list with the local computational base state values 
+    # d = individual qudit dimension
+    N = len(local)
+    j = 0
+    for k in range(0,N):
+        j += local[k]*d**(N-1-k)
+    return j # value of the global computational basis index
+
 class OptimizerFactory:
     @staticmethod
     def get_optimizer(optimizer_name, *args, **kwargs):
@@ -445,8 +465,11 @@ class Circuit(nn.Module):
     def U(self, **kwargs):
         self.add_gate(U(dim=self.dim, device=self.device, wires=self.wires, **kwargs))
 
+    def CU(self, **kwargs):
+        self.add_gate(CU(dim=self.dim, wires=self.wires, device=self.device, **kwargs))
+
     def Custom(self, **kwargs):
-        self.add_gate(CustomGate(dim=self.dim, device=self.device, **kwargs))
+        self.add_gate(CustomGate(dim=self.dim, wires=self.wires, device=self.device, **kwargs))
 
     def forward(self, x):
         """
@@ -1686,6 +1709,8 @@ class CRX(nn.Module):
         """
         c = self.index[0]
         t = self.index[1]
+        j = self.j + 1
+        k = self.k + 1
         
         D = self.dim**self.wires
         U = torch.zeros((D, D), dtype=torch.complex64, device=x.device)
@@ -1807,36 +1832,41 @@ class CRY(nn.Module):
         """
         c = self.index[0]
         t = self.index[1]
+        j = self.j + 1
+        k = self.k + 1
         
         D = self.dim**self.wires
+        U = torch.zeros((D, D), dtype=torch.complex64, device=x.device)
         Dl = D // self.dim
         indices_list = []
         values_list = []
 
+        if c < t:
+            c_local = c
+        else:
+            c_local = c - 1
+
         for m in range(Dl):
             local = dec2den(m, self.wires-1, self.dim)
-            if self.wires == 2:
-                angle = (local[0]*self.angle)/2
-            else:
-                angle = (local[c]*self.angle)/2
+            angle = (local[c_local] * self.angle) / 2
 
             listj = local.copy()
-            listj.insert(t, self.j-1)
+            listj.insert(t, j-1)
             intj = den2dec(listj, self.dim)
             listk = local.copy()
-            listk.insert(t, self.k-1)
+            listk.insert(t, k-1)
             intk = den2dec(listk, self.dim)
 
-            indices = torch.tensor([[intj, intk, intj, intk], [intj, intk, intk, intj]])
+            indices = torch.tensor([[intj, intk, intj, intk], [intj, intk, intk, intj]]).to(x.device)
 
-            values = torch.zeros(4, dtype=torch.complex64)
+            values = torch.zeros(4, dtype=torch.complex64, device=x.device)
             values[0] = torch.cos(angle)
             values[1] = torch.cos(angle)
             values[2] = -torch.sin(angle)
             values[3] = -torch.sin(angle)
 
             for l in range(self.dim):
-                if l != self.j-1 and l != self.k-1:
+                if l != j-1 and l != k-1:
                     listl = local.copy()
                     listl.insert(t, l)
                     intl = den2dec(listl, self.dim)
@@ -1982,5 +2012,37 @@ class U(nn.Module):
 
         U = self.U - torch.conj(self.U.T)
         U = torch.matrix_exp(U)
+
+        return U @ x
+
+
+class CU(nn.Module):
+    
+    def __init__(self, dim=2, wires=2, index=[0, 1], control_state = [1], device='cpu'):
+        super(CU, self).__init__()
+
+        self.device = device
+        self.wires = wires
+        self.index = index
+        self.dim = dim
+        self.control_state = control_state
+        self.M = nn.Parameter(eye(dim=dim, sparse=False, device=device) + torch.randn((dim, dim), device=device) + 1j*torch.randn((dim, dim), device=device))
+    
+    def forward(self, x):
+
+        M = self.M - torch.conj(self.M.T)
+        M = torch.matrix_exp(M)
+
+        U = 0.0
+        for d in range(self.dim):
+            u = torch.eye(1, device=x.device, dtype=torch.complex64)
+            for i in range(self.wires):
+                if i == self.index[0]:
+                    u = torch.kron(u, base(self.dim, device=x.device)[d] @ base(self.dim, device=x.device)[d].T)
+                elif i == self.index[1] and d in self.control_state:
+                    u = torch.kron(u, M)
+                else:
+                    u = torch.kron(u, torch.eye(self.dim, device=x.device, dtype=torch.complex64))
+            U += u
 
         return U @ x
