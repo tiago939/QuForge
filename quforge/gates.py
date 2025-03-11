@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from math import log as log
-import aux
+import quforge.aux
 import itertools
 
 class CustomGate(nn.Module):
