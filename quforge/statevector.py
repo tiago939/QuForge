@@ -2,6 +2,150 @@ import numpy as np
 import sympy as sp
 import torch
 from IPython.display import display, Math, Latex
+import itertools
+
+def State(dits, dim=2, device='cpu'):
+    base = torch.zeros((dim, dim, 1), device=device)
+    for i in range(dim):
+        base[i][i] = 1.0 + 1j*0.0
+
+    state = torch.eye(1, dtype=torch.complex64, device=device)
+    st = ''
+    for i in range(len(dits)):
+        s = dits[i]
+        if s.isdigit() is False: 
+            state = torch.kron(state, base[int(st)])
+            st = ''
+        elif i == len(dits)-1:
+            st += s
+            state = torch.kron(state, base[int(st)])
+        else:
+            st += s
+    return state
+
+def density_matrix(state):
+    rho = torch.matmul(state, torch.conj(state).T)
+    return rho
+
+
+def partial_trace(state, index=[0], dim=2, wires=1):
+    da = dim**len(index)
+    db = dim**(wires - len(index))
+
+    # Create tensors for indices
+    all_indices = torch.arange(wires, device=state.device)
+    index_tensor = torch.tensor(index, device=state.device)
+    
+    # Create mask and complementary indices
+    complementary_indices = all_indices[~torch.isin(all_indices, index_tensor)]
+    
+    # Sort and concatenate indices
+    new_order = torch.cat((index_tensor.sort()[0], complementary_indices), dim=0)
+
+    # Transpose
+    reshaped_state = state.view((dim,) * wires).permute(*new_order).contiguous().view(da, db)
+    
+    # matmul and conjugation operations
+    state_conj = reshaped_state.conj()
+    rho = torch.matmul(reshaped_state, state_conj.transpose(0, 1))
+
+    return rho
+
+
+def measure(state=None, index=[0], shots=1, dim=2, wires=1):
+    #input:
+        #state: state to measure
+        #index: list of qudits to measure
+        #shots: number of measurements
+    #output:
+        #histogram: histogram of the measurements
+        #p: distribution probability
+    rho = partial_trace(state, index, dim, wires)
+    p = abs(torch.diag(rho))
+    p = p/torch.sum(p)
+
+    a = np.array(range(len(rho)))
+    positions = np.random.choice(a, p=p.detach().cpu().numpy(), size=shots)
+
+    L = list(itertools.product(range(dim), repeat=len(index)))
+    histogram = dict()
+    keys = []
+    for l in L:
+        key = ''
+        for i in range(len(index)):
+            key += str(l[i])
+        keys.append(key)
+        histogram[key] = 0
+    for position in positions:
+        histogram[keys[position]] += 1
+
+    return histogram, p
+
+def partial_trace(state, index=[0], dim=2, wires=1):
+    da = dim**len(index)
+    db = dim**(wires - len(index))
+
+    # Create tensors for indices
+    all_indices = torch.arange(wires, device=state.device)
+    index_tensor = torch.tensor(index, device=state.device)
+    
+    # Create mask and complementary indices
+    complementary_indices = all_indices[~torch.isin(all_indices, index_tensor)]
+    
+    # Sort and concatenate indices
+    new_order = torch.cat((index_tensor.sort()[0], complementary_indices), dim=0)
+
+    # Transpose
+    reshaped_state = state.view((dim,) * wires).permute(*new_order).contiguous().view(da, db)
+    
+    # matmul and conjugation operations
+    state_conj = reshaped_state.conj()
+    rho = torch.matmul(reshaped_state, state_conj.transpose(0, 1))
+
+    return rho
+        
+
+def project(state, index=[0], dim=2):
+    p = [(abs(state[i])**2).item() for i in range(len(state))]
+    p = p/np.sum(p)
+
+    a = np.array(range(len(state)))
+    position = np.random.choice(a, p=p, size=1)[0]
+
+    L = list(itertools.product(range(dim), repeat=int(log(state.shape[0], D))))[position]
+    U = torch.eye(1, device=state.device)
+    counter = 0
+    size = int(log(state.shape[0], dim))
+    for i in range(size):
+        if i not in index:
+            U = torch.kron(U, torch.eye(dim, device=state.device))
+        else:
+            U = torch.kron(U, projector(L[i], dim).to(state.device))
+            counter += 1
+
+    state = torch.matmul(U, state)
+    state = state/(torch.sum(abs(state)**2)**0.5)
+    
+    return state, L
+
+
+def mean(state, observable='Z', index=0):
+
+    if isinstance(observable, str):
+        if observable == 'Z':
+            U = ZGate(index=0, device=state.device)
+    elif isinstance(observable, np.ndarray):
+        M = torch.tensor(observable).to(state.device)
+        U = CustomGate(M, index)
+    else:
+        M = observable.to(state.device)
+        U = CustomGate(M, index)
+
+    output = torch.matmul(state.T, U(state))[0][0]
+
+    return output
+
+
 
 class LatexDisplay:
     def __init__(self, latex):
