@@ -1,5 +1,5 @@
 import torch.nn as nn
-import gates
+import quforge.gates as gates
 
 class Circuit(nn.Module):
     r"""

@@ -1,9 +1,9 @@
 import torch
-import aux
-import gates
-import statevector as sv
-import circuit
-import optimizer
+import quforge.aux as aux
+import quforge.gates as gates
+import quforge.statevector as sv
+import quforge.circuit as circuit
+import quforge.optimizer as optimizer
 
 def State(*args, **kwargs):
     return sv.State(*args, **kwargs)
