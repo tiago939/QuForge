@@ -1,10 +1,6 @@
 import torch.nn as nn
 import quforge.gates as gates
 
-import torch
-import torch.nn as nn
-import gates  # Assumes that your gate modules are in a module named "gates"
-
 class Circuit(nn.Module):
     r"""
     Quantum Circuit for qudits.
