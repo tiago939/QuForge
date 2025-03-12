@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="quforge",
-    version="0.3.1",
+    version="0.3.2",
     author="Tiago de Souza Farias",
     author_email="tiago.farias@ufscar.br",
     description="QuForge: a library for qudit simulation",
