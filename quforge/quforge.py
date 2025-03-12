@@ -78,3 +78,6 @@ def sum(*args, **kwargs):
 
 def kron(*args, **kwargs):
     return aux.kron(*args, **kwargs)
+
+def eye(*args, **kwargs):
+    return aux.eye(*args, **kwargs)

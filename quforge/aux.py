@@ -80,8 +80,8 @@ def Sz(j, D=2, device='cpu'):
 sigma = [Sx, Sy, Sz]
 
 
-def base(D, device='cpu'):
-    base = torch.eye(D, device=device).reshape((D,D,1))
+def base(dim, device='cpu'):
+    base = torch.eye(dim, device=device, dtype=torch.complex64).reshape((dim,dim,1))
     return base
 
 
@@ -93,32 +93,74 @@ def mean(x):
     return torch.mean(x)
 
 
-def dec2den(j,N,d):
-    # convert from decimal to denary representation
-    den = [0 for k in range(0,N)]
+def dec2den(j, N, d):
+    """
+    Convert a global (decimal) index j into its local multi-index representation.
+    
+    Args:
+        j (int): The global index.
+        N (int): The number of qudits.
+        d (int or list of int): The dimension(s) of the qudits. If an integer, all qudits have that dimension;
+                                if a list, each element specifies the dimension of the corresponding qudit.
+    
+    Returns:
+        list: A list of length N representing the multi-index (local computational basis state).
+    """
+    den = [0 for _ in range(N)]
     jv = j
-    for k in range(0,N):
-        if jv >= d**(N-1-k):
-            den[k] = jv//(d**(N-1-k))
-            jv = jv - den[k]*d**(N-1-k)
+    if isinstance(d, int):
+        # Uniform dimension: same as before.
+        for k in range(N):
+            base = d ** (N - 1 - k)
+            if jv >= base:
+                den[k] = jv // base
+                jv = jv - den[k] * base
+    else:
+        # d is a list: each qudit has its own dimension.
+        # Compute the product of dimensions for qudits k+1 through N-1.
+        for k in range(N):
+            prod = 1
+            for dim in d[k+1:]:
+                prod *= dim
+            if prod == 0:
+                prod = 1  # avoid division by zero if no subsequent digits
+            den[k] = jv // prod
+            jv = jv % prod
     return den
+    
+
+def den2dec(local, d):
+    """
+    Convert a local multi-index (denary representation) into a global (decimal) index.
+    
+    Args:
+        local (list of int): The local computational basis state as a list of digits.
+        d (int or list of int): The dimension(s) of the qudits. If an integer, all qudits have that dimension;
+                                if a list, each element specifies the dimension of the corresponding qudit.
+    
+    Returns:
+        int: The global computational basis index.
+    """
+    N = len(local)
+    j = 0
+    if isinstance(d, int):
+        for k in range(N):
+            j += local[k] * (d ** (N - 1 - k))
+    else:
+        # Compute the place value for each digit.
+        for k in range(N):
+            prod = 1
+            for dim in d[k+1:]:
+                prod *= dim
+            j += local[k] * prod
+    return j
+
 
 def projector(index, dim):
     P = torch.zeros((dim, dim), dtype=torch.complex64)
     P[index][index] = 1.0
 
     return P
-
-def den2dec(local,d):
-    # convert from denary to decimal representation
-    # local = list with the local computational base state values 
-    # d = individual qudit dimension
-    N = len(local)
-    j = 0
-    for k in range(0,N):
-        j += local[k]*d**(N-1-k)
-    return j # value of the global computational basis index
-
 
 def eye(dim, device='cpu', sparse=False):
     '''
@@ -146,23 +188,85 @@ def ones(m,n, device='cpu'):
     M = torch.ones((m, n), device=device)
     return M
 
+
 def cnot_qudits_Position(c, t, n, d, device='cpu'):
-    values = torch.arange(d,dtype=torch.float).to(device)
-    L = torch.stack(torch.meshgrid(*([values] * n)), dim=-1).to(device).reshape(-1, n)
-    L[:,t]=(L[:,t]+L[:,c])%d
-    tt = d**torch.arange(n-1, -1, -1, dtype=torch.float).to(device).reshape(n,1)
-    lin = torch.matmul(L,tt).to(device)
-    col = torch.arange(d**n,dtype=torch.float).to(device).reshape(d**n,1)
-    return  torch.cat((lin, col), dim=1).to(device)
+    """
+    Compute the positions (row, column indices) for the sparse CNOT matrix for multidimensional qudits.
+
+    Args:
+        c (int): Index of the control qudit.
+        t (int): Index of the target qudit.
+        n (int): Total number of qudits.
+        d (int or list of int): The dimension of each qudit. If an integer, all qudits are assumed to have that dimension;
+                                if a list, each element specifies the dimension for the corresponding qudit.
+        device (str): The device for tensor allocation.
+
+    Returns:
+        torch.Tensor: A tensor of shape (D, 2) where D is the total Hilbert space dimension. Each row contains a
+                      pair (row_index, col_index) for a nonzero element of the CNOT matrix.
+    """
+    # If d is a single integer, assume all qudits have the same dimension.
+    if isinstance(d, int):
+        dims = [d] * n
+    else:
+        dims = d
+        if len(dims) != n:
+            raise ValueError("Length of dimension list must equal the number of qudits (n).")
+
+    # Build the computational basis for n qudits.
+    # Create a list of 1D tensors for each qudit's possible values.
+    grid = [torch.arange(dim, dtype=torch.float, device=device) for dim in dims]
+    # Use torch.meshgrid to create the full grid.
+    meshes = torch.meshgrid(*grid, indexing='ij')
+    # Stack the meshgrid outputs to form a matrix L of shape (D, n), where D is the total number of basis states.
+    L = torch.stack(meshes, dim=-1).reshape(-1, n)
+
+    # Update the target qudit's value: new_target = (old_target + control) mod (dimension of target)
+    L[:, t] = (L[:, t] + L[:, c]) % dims[t]
+
+    # Compute the place values for each qudit.
+    # For example, for dims = [d0, d1, ..., d_{n-1}], the linear index is:
+    #    index = L[0]* (d1*d2*...*d_{n-1}) + L[1]* (d2*...*d_{n-1}) + ... + L[n-1]
+    place = []
+    prod = 1
+    for dim in dims[::-1]:
+        place.insert(0, prod)
+        prod *= dim
+    tt = torch.tensor(place, dtype=torch.float, device=device).reshape(n, 1)
+
+    # Compute the new linear indices for the modified basis states.
+    lin = torch.matmul(L, tt)
+    D = int(prod)  # total Hilbert space dimension
+    col = torch.arange(D, dtype=torch.float, device=device).reshape(D, 1)
+    return torch.cat((lin, col), dim=1)
 
 
 def CNOT_sparse(c, t, d, n, device='cpu'):
-    # CNOT sparse matrix
-    D = d**n
-    indices = cnot_qudits_Position(c,t,n,d,device=device)
-    values = torch.ones(D).to(device)
-    eye_sparse = torch.sparse_coo_tensor(indices.t(), values, (D, D),dtype=torch.complex64).to(device)
+    """
+    Constructs the sparse matrix representation of the CNOT gate for multidimensional qudits.
 
+    Args:
+        c (int): The control qudit index.
+        t (int): The target qudit index.
+        d (int or list of int): The dimension(s) of the qudits.
+        n (int): The total number of qudits.
+        device (str): The device for tensor allocation.
+
+    Returns:
+        torch.sparse_coo_tensor: The sparse matrix representation of the CNOT gate.
+    """
+    # If d is a single integer, convert to list.
+    if isinstance(d, int):
+        dims = [d] * n
+    else:
+        dims = d
+        if len(dims) != n:
+            raise ValueError("Length of dimension list must equal the number of qudits (n).")
+    # Total Hilbert space dimension: product of all individual dimensions.
+    D = int(np.prod(dims))
+    indices = cnot_qudits_Position(c, t, n, dims, device=device)
+    values = torch.ones(D, device=device)
+    eye_sparse = torch.sparse_coo_tensor(indices.t(), values, (D, D), dtype=torch.complex64, device=device)
     return eye_sparse
 
 
