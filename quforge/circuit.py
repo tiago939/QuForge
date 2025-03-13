@@ -1,20 +1,22 @@
 import torch.nn as nn
 import quforge.gates as gates
 
+
 class Circuit(nn.Module):
     r"""
     Quantum Circuit for qudits.
 
     The Circuit class allows users to dynamically add various quantum gates to construct a quantum
-    circuit for qudit systems. It supports a wide range of gates, including single-qudit, multi-qudit,
-    and custom gates. The circuit is represented as a sequence of quantum operations (gates) that act on
-    qudit states.
+    circuit for qudit systems. It supports a wide range of gates, including single-qudit,
+    multi-qudit, and custom gates. The circuit is represented as a sequence of quantum operations
+    (gates) that act on qudit states.
 
     **Arguments:**
-        dim (int or list of int): The dimension of the qudits. If an integer, all qudits are assumed to have that
-                                  dimension; if a list is provided, each element specifies the dimension of the corresponding qudit.
-        wires (int): The total number of qudits (wires) in the circuit (used when `dim` is an integer). If `dim` is a list,
-                     wires is taken as the length of that list.
+        dim (int or list of int): The dimension of the qudits. If an integer, all qudits are assumed
+            to have that dimension; if a list is provided, each element specifies the dimension of
+            the corresponding qudit. wires (int): The total number of qudits (wires) in the circuit
+            (used when `dim` is an integer). If `dim` is a list, wires is taken as the length of
+            that list.
         device (str): The device to perform the computations on. Default is 'cpu'.
         sparse (bool): Whether to use sparse matrix representations for the gates. Default is False.
 
@@ -56,11 +58,12 @@ class Circuit(nn.Module):
         >>> result = circuit(state)
         >>> print(result)
     """
-    def __init__(self, dim=2, wires=1, device='cpu', sparse=False):
+
+    def __init__(self, dim=2, wires=1, device="cpu", sparse=False):
         super(Circuit, self).__init__()
         # Process dimensions: if dim is a list, use its length as wires.
         if isinstance(dim, int):
-            self.dim = dim 
+            self.dim = dim
             self.wires = wires
         else:
             self.dim = dim
@@ -77,7 +80,9 @@ class Circuit(nn.Module):
             module: The gate module to add.
             **kwargs: Additional arguments for the gate.
         """
-        gate = module(dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs)
+        gate = module(
+            dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs
+        )
         self.circuit.add_module(str(len(self.circuit)), gate)
 
     def add_gate(self, gate, **kwargs):
@@ -103,16 +108,32 @@ class Circuit(nn.Module):
         self.add_gate(gates.Z(dim=self.dim, device=self.device, **kwargs))
 
     def RX(self, **kwargs):
-        self.add_gate(gates.RX(dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs))
+        self.add_gate(
+            gates.RX(
+                dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs
+            )
+        )
 
     def RY(self, **kwargs):
-        self.add_gate(gates.RY(dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs))
+        self.add_gate(
+            gates.RY(
+                dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs
+            )
+        )
 
     def RZ(self, **kwargs):
-        self.add_gate(gates.RZ(dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs))
+        self.add_gate(
+            gates.RZ(
+                dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs
+            )
+        )
 
     def CNOT(self, **kwargs):
-        self.add_gate(gates.CNOT(dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs))
+        self.add_gate(
+            gates.CNOT(
+                dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs
+            )
+        )
 
     def SWAP(self, **kwargs):
         self.add_gate(gates.SWAP(dim=self.dim, wires=self.wires, device=self.device, **kwargs))
@@ -127,13 +148,25 @@ class Circuit(nn.Module):
         self.add_gate(gates.MCX(dim=self.dim, wires=self.wires, device=self.device, **kwargs))
 
     def CRX(self, **kwargs):
-        self.add_gate(gates.CRX(dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs))
+        self.add_gate(
+            gates.CRX(
+                dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs
+            )
+        )
 
     def CRY(self, **kwargs):
-        self.add_gate(gates.CRY(dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs))
+        self.add_gate(
+            gates.CRY(
+                dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs
+            )
+        )
 
     def CRZ(self, **kwargs):
-        self.add_gate(gates.CRZ(dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs))
+        self.add_gate(
+            gates.CRZ(
+                dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs
+            )
+        )
 
     def U(self, **kwargs):
         self.add_gate(gates.U(dim=self.dim, wires=self.wires, device=self.device, **kwargs))
@@ -142,7 +175,9 @@ class Circuit(nn.Module):
         self.add_gate(gates.CU(dim=self.dim, wires=self.wires, device=self.device, **kwargs))
 
     def Custom(self, **kwargs):
-        self.add_gate(gates.CustomGate(dim=self.dim, wires=self.wires, device=self.device, **kwargs))
+        self.add_gate(
+            gates.CustomGate(dim=self.dim, wires=self.wires, device=self.device, **kwargs)
+        )
 
     def forward(self, x):
         """

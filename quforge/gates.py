@@ -1,9 +1,9 @@
-import numpy as np
-import torch
-import torch.nn as nn
 from math import log as log
 import itertools
+import numpy as np
 import quforge.aux as aux
+import torch
+import torch.nn as nn
 
 
 class H(nn.Module):
@@ -13,11 +13,11 @@ class H(nn.Module):
     The Hadamard gate creates a superposition of states in a qudit system.
 
     **Matrix Representation:**
-    
+
     For a qudit of dimension D, the Hadamard gate is defined as
 
     .. math::
-          
+
             H = \frac{1}{\sqrt{D}}
             \begin{pmatrix}
             1 & 1 & \cdots & 1 \\\\
@@ -28,7 +28,7 @@ class H(nn.Module):
             \end{pmatrix}
 
     where 
-      
+
     .. math::
           \omega = \exp\left(\frac{2\pi i}{D}\right).
 
@@ -55,7 +55,7 @@ class H(nn.Module):
         >>> psi = qf.State('0-1-0', dim=2)  # three-qubit state
         >>> result = gate(psi)
         >>> print(result)
-        
+
         >>> # Multidimensional qudits (e.g., first qubit is a qubit and second is a qutrit):
         >>> gate = qf.H(dim=[2,3], index=[1], device='cpu')
         >>> psi = qf.State('1-2', dim=[2,3])
@@ -63,7 +63,7 @@ class H(nn.Module):
         >>> print(result)
     """
 
-    def __init__(self, dim=2, index=[0], inverse=False, device='cpu'):
+    def __init__(self, dim=2, index=[0], inverse=False, device="cpu"):
         super(H, self).__init__()
         self.index = index
         self.device = device
@@ -74,12 +74,12 @@ class H(nn.Module):
         if isinstance(dim, int):
             # Uniform dimension for all qudits.
             self.dim = dim
-            omega = np.exp(2*1j*np.pi/dim)
+            omega = np.exp(2 * 1j * np.pi / dim)
             # Build the Hadamard matrix for dimension "dim".
             M = torch.ones((dim, dim), dtype=torch.complex64, device=device)
             for i in range(1, dim):
                 for j in range(1, dim):
-                    M[i, j] = omega**(i*j)
+                    M[i, j] = omega ** (i * j)
             M = M / (dim**0.5)
             if inverse:
                 M = torch.conj(M).T.contiguous()
@@ -91,11 +91,11 @@ class H(nn.Module):
             self.dim = dim  # list of dimensions, one per qudit.
             for idx in self.index:
                 d = dim[idx]
-                omega = np.exp(2*1j*np.pi/d)
+                omega = np.exp(2 * 1j * np.pi / d)
                 M = torch.ones((d, d), dtype=torch.complex64, device=device)
                 for i in range(1, d):
                     for j in range(1, d):
-                        M[i, j] = omega**(i*j)
+                        M[i, j] = omega ** (i * j)
                 M = M / (d**0.5)
                 if inverse:
                     M = torch.conj(M).T.contiguous()
@@ -142,22 +142,22 @@ class X(nn.Module):
     **Matrix Representation:**
 
     For a qubit (2-level qudit), the Pauli-X gate is represented as:
-    
+
     .. math::
-          
+
             X = 
             \begin{pmatrix}
             0 & 1 \\
             1 & 0
             \end{pmatrix}
-    
+
     For a higher-dimensional qudit, the X gate shifts the basis states by a cyclic parameter \( s \)
     as follows. Given a qudit of dimension \( D \), its matrix elements are defined by
 
     .. math::
-        
+
             X_{j,i} = \langle j |X| i \rangle = \langle j | (i+s) \rangle,
-    
+
     where the addition is modulo \( D \).
 
     **Arguments:**
@@ -190,7 +190,7 @@ class X(nn.Module):
         >>> psi = qf.State('0-1-0', dim=2)  # three-qubit state
         >>> result = gate(psi)
         >>> print(result)
-        
+
         >>> # Multidimensional qudits (e.g., first qudit is a qubit and second is a qutrit):
         >>> gate = qf.X(s=1, dim=[2,3], index=[1], device='cpu')
         >>> psi = qf.State('0-2', dim=[2,3])
@@ -198,18 +198,18 @@ class X(nn.Module):
         >>> print(result)
     """
 
-    def __init__(self, s=1, dim=2, index=[0], device='cpu', inverse=False):
+    def __init__(self, s=1, dim=2, index=[0], device="cpu", inverse=False):
         super(X, self).__init__()
         self.index = index
         self.inverse = inverse
         self.device = device
-        
+
         # Build the X gate(s) for target qudits.
         if isinstance(dim, int):
             self.dim = dim  # Uniform dimension for all qudits.
             M = torch.zeros((dim, dim), dtype=torch.complex64, device=device)
             # Use the aux.base function to get basis vectors.
-            basis = base(dim, device=device)
+            basis = aux.base(dim, device=device)
             for i in range(dim):
                 for j in range(dim):
                     # The matrix element is given by the overlap between basis state j and basis state (i+s)%dim.
@@ -219,7 +219,7 @@ class X(nn.Module):
             if inverse:
                 M = torch.conj(M.T)
             # In the uniform case, store the same M for each target qudit.
-            self.register_buffer('M', M)
+            self.register_buffer("M", M)
         else:
             # Multidimensional: dim is a list.
             self.dim = dim  # list of dimensions, one per qudit.
@@ -240,7 +240,7 @@ class X(nn.Module):
         Apply the X gate to the qudit state.
 
         Args:
-            x (torch.Tensor): 
+            x (torch.Tensor):
                 The input state tensor of the qudit. It is assumed to be a column vector
                 whose dimension is the product of the individual qudit dimensions.
 
@@ -252,7 +252,7 @@ class X(nn.Module):
             wires = int(round(np.log(x.shape[0]) / np.log(self.dim)))
         else:
             wires = len(self.dim)
-        
+
         U = torch.eye(1, dtype=torch.complex64, device=x.device)
         for i in range(wires):
             if i in self.index:
@@ -276,24 +276,24 @@ class Z(nn.Module):
     generalizing the Pauli-Z gate from qubits to higher dimensions.
 
     **Matrix Representation:**
-    
+
     For a qubit (2-level qudit), the Pauli-Z gate is represented as:
-    
+
     .. math::
-          
+
             Z = 
             \begin{pmatrix}
             1 & 0 \\
             0 & -1
             \end{pmatrix}
-    
+
     For a higher-dimensional qudit, the Z gate applies a phase shift based on a complex
     exponential. For a qudit of dimension \( D \) with phase parameter \( s \), the matrix is:
-    
+
     .. math::
-    
+
             Z_s = \text{diag}(1, \omega^s, \omega^{2s}, \ldots, \omega^{(D-1)s})
-    
+
     where \( \omega = \exp(2\pi i / D) \).
 
     **Arguments:**
@@ -327,7 +327,7 @@ class Z(nn.Module):
         >>> psi = qf.State('0-1-0', dim=2)  # three-qubit state
         >>> result = gate(psi)
         >>> print(result)
-        
+
         >>> # Multidimensional qudits (e.g., first qudit is a qubit and second is a qutrit):
         >>> gate = qf.Z(dim=[2,3], s=1, index=[1], device='cpu')
         >>> psi = qf.State('0-2', dim=[2,3])
@@ -335,7 +335,7 @@ class Z(nn.Module):
         >>> print(result)
     """
 
-    def __init__(self, dim=2, s=1, index=[0], device='cpu', inverse=False):
+    def __init__(self, dim=2, s=1, index=[0], device="cpu", inverse=False):
         super(Z, self).__init__()
         self.index = index
         self.inverse = inverse
@@ -353,7 +353,7 @@ class Z(nn.Module):
                     M[j, i] = (omega ** (j * s)) * aux.delta(i, j)
             if inverse:
                 M = torch.conj(M.T)
-            self.register_buffer('M', M)
+            self.register_buffer("M", M)
         else:
             # Multidimensional qudits: dim is a list.
             self.dim = dim  # list of dimensions, one per qudit.
@@ -374,8 +374,8 @@ class Z(nn.Module):
         Apply the Z gate to the qudit state.
 
         Args:
-            x (torch.Tensor): 
-                The input state tensor of the qudit. It is assumed to be a column vector whose dimension 
+            x (torch.Tensor):
+                The input state tensor of the qudit. It is assumed to be a column vector whose dimension
                 is the product of the individual qudit dimensions.
 
         Returns:
@@ -386,7 +386,7 @@ class Z(nn.Module):
             wires = int(round(np.log(x.shape[0]) / np.log(self.dim)))
         else:
             wires = len(self.dim)
-        
+
         U = torch.eye(1, dtype=torch.complex64, device=x.device)
         for i in range(wires):
             if i in self.index:
@@ -405,8 +405,8 @@ class Z(nn.Module):
         Return the matrix representation of the Z gate.
 
         Returns:
-            torch.Tensor or dict: 
-                The Z gate matrix if uniform dimensions are used, or a dictionary mapping target qudit 
+            torch.Tensor or dict:
+                The Z gate matrix if uniform dimensions are used, or a dictionary mapping target qudit
                 indices to their respective Z gate matrices for multidimensional qudits.
         """
         if isinstance(self.dim, int):
@@ -419,32 +419,32 @@ class Y(nn.Module):
     r"""
     Generalized Pauli-Y (Y) Gate for qudits.
 
-    The Y gate represents a combination of the X and Z gates, generalizing the Pauli-Y gate 
+    The Y gate represents a combination of the X and Z gates, generalizing the Pauli-Y gate
     from qubits to higher dimensions. It is defined as
 
     .. math::
-    
+
             Y = \frac{1}{i}\, Z \cdot X,
-    
+
     where the generalized Pauli-X and Pauli-Z gates are applied to the target qudits.
 
     **Arguments:**
-        s (int): 
+        s (int):
             The cyclic shift parameter for the X gate. Default is 1.
-        dim (int or list of int): 
+        dim (int or list of int):
             The dimension of the qudit. If an integer, all qudits are assumed to have that dimension.
             If a list is provided, each element corresponds to the dimension of the respective qudit.
-        index (list of int): 
+        index (list of int):
             The indices of the qudits to which the gate is applied.
-        device (str): 
+        device (str):
             The device on which the computations are performed. Default is 'cpu'.
 
     **Attributes:**
-        index (list of int): 
+        index (list of int):
             The indices of the qudits on which the gate is applied.
-        dim (int or list of int): 
+        dim (int or list of int):
             The qudit dimension(s).
-        M (torch.Tensor) or M_dict (dict): 
+        M (torch.Tensor) or M_dict (dict):
             For uniform dimensions, M stores the matrix representation of the Y gate.
             For multidimensional qudits, M_dict maps each target qudit index to its corresponding Y gate matrix.
 
@@ -454,31 +454,31 @@ class Y(nn.Module):
         >>> psi = qf.State('0-1-0', dim=2)  # three-qubit state
         >>> result = gate(psi)
         >>> print(result)
-        
+
         >>> # Multidimensional qudits (e.g., first qudit is a qubit and second is a qutrit):
         >>> gate = qf.Y(dim=[2,3], index=[1], device='cpu')
         >>> psi = qf.State('0-2', dim=[2,3])
         >>> result = gate(psi)
         >>> print(result)
     """
-    
-    def __init__(self, s=1, dim=2, index=[0], device='cpu'):
+
+    def __init__(self, s=1, dim=2, index=[0], device="cpu"):
         super(Y, self).__init__()
         self.index = index
         self.dim = dim
         self.device = device
         self.s = s
-        
+
         # Construct the X and Z gate objects.
         # These classes are assumed to have been updated to support multidimensional qudits.
         self.x_gate = X(s=s, dim=dim, index=index, device=device)
         self.z_gate = Z(dim=dim, s=s, index=index, device=device)
-        
+
         # Compute the Y gate as Y = Z * X / (1j).
         if isinstance(dim, int):
             # Uniform qudit dimensions.
             M = torch.matmul(self.z_gate.M, self.x_gate.M) / 1j
-            self.register_buffer('M', M)
+            self.register_buffer("M", M)
         else:
             # Multidimensional qudits: build a dictionary of Y matrices for target qudits.
             self.M_dict = {}
@@ -491,7 +491,7 @@ class Y(nn.Module):
         Apply the Y gate to the qudit state.
 
         Args:
-            x (torch.Tensor): 
+            x (torch.Tensor):
                 The input state tensor of the qudit. It is assumed to be a column vector whose dimension
                 is the product of the individual qudit dimensions.
 
@@ -506,7 +506,9 @@ class Y(nn.Module):
                 if i in self.index:
                     U = torch.kron(U, self.M)
                 else:
-                    U = torch.kron(U, torch.eye(self.dim, dtype=torch.complex64, device=x.device))
+                    U = torch.kron(
+                        U, torch.eye(self.dim, dtype=torch.complex64, device=x.device)
+                    )
         else:
             wires = len(self.dim)
             U = torch.eye(1, dtype=torch.complex64, device=x.device)
@@ -514,7 +516,10 @@ class Y(nn.Module):
                 if i in self.index:
                     U = torch.kron(U, self.M_dict[i])
                 else:
-                    U = torch.kron(U, torch.eye(self.dim[i], dtype=torch.complex64, device=x.device))
+                    U = torch.kron(
+                        U,
+                        torch.eye(self.dim[i], dtype=torch.complex64, device=x.device),
+                    )
         return torch.matmul(U, x)
 
 
@@ -526,7 +531,7 @@ class RX(nn.Module):
     For a qubit (2-level system), the matrix representation is given by
 
     .. math::
-        
+
             RX(\theta) = 
             \begin{pmatrix}
             \cos(\theta/2) & -i\sin(\theta/2) \\
@@ -550,15 +555,15 @@ class RX(nn.Module):
             The total number of qudits in the circuit. (Used when `dim` is an integer.)
         device (str): 
             The device on which computations are performed. Default is 'cpu'.
-        angle (float or bool): 
-            The rotation angle. If False, the angle is learned as a parameter. Otherwise, the given angle is used.
+        angle (float or torch.Tensor or None): 
+            The rotation angle. If None, create a random parameter, if float or torch.Tensor, use it directly.
         sparse (bool): 
             Whether to use a sparse matrix representation. Default is False.
 
     **Attributes:**
         j, k: The target levels for rotation (stored per qudit in a mapping if needed).
         index (list of int): The indices of the qudits to which the gate is applied.
-        angle (torch.nn.Parameter): The rotation angle(s) for each qudit.
+        angle (torch.nn.Parameter or torch.Tensor): The rotation angle(s) for each qudit.
         sparse (bool): Whether the matrix representation is sparse.
         dim (int or list of int): The dimension(s) of the qudit(s).
 
@@ -577,7 +582,17 @@ class RX(nn.Module):
         >>> print(result)
     """
 
-    def __init__(self, j=0, k=1, index=[0], dim=2, wires=1, device='cpu', angle=False, sparse=False):
+    def __init__(
+        self,
+        j=0,
+        k=1,
+        index=[0],
+        dim=2,
+        wires=1,
+        device="cpu",
+        angle=None,
+        sparse=False,
+    ):
         super(RX, self).__init__()
         self.device = device
         self.sparse = sparse
@@ -598,19 +613,25 @@ class RX(nn.Module):
             self.j_map = {t: j for t in self.index}
         else:
             if len(j) != len(self.index):
-                raise ValueError("If 'j' is provided as a list, its length must equal the number of target qudits in 'index'.")
+                raise ValueError(
+                    "If 'j' is provided as a list, its length must equal the number of target qudits in 'index'."
+                )
             self.j_map = {t: j_val for t, j_val in zip(self.index, j)}
         if isinstance(k, int):
             self.k_map = {t: k for t in self.index}
         else:
             if len(k) != len(self.index):
-                raise ValueError("If 'k' is provided as a list, its length must equal the number of target qudits in 'index'.")
+                raise ValueError(
+                    "If 'k' is provided as a list, its length must equal the number of target qudits in 'index'."
+                )
             self.k_map = {t: k_val for t, k_val in zip(self.index, k)}
 
         # Initialize the rotation angle parameter.
         # The angle parameter is defined for each qudit (wire).
-        if angle is False:
+        if angle is None:
             self.angle = nn.Parameter(torch.randn(num_wires, device=device))
+        elif isinstance(angle, torch.Tensor):
+            self.angle = angle
         else:
             self.angle = nn.Parameter(angle * torch.ones(num_wires, device=device))
 
@@ -619,10 +640,10 @@ class RX(nn.Module):
         Apply the RX gate to the qudit state.
 
         Args:
-            x (torch.Tensor): 
+            x (torch.Tensor):
                 The input state tensor (a column vector) whose dimension is the product of the individual
                 qudit dimensions.
-            param (torch.Tensor or bool): 
+            param (torch.Tensor or bool):
                 If False, use the internal angle parameter. If provided, use it as the rotation angle.
 
         Returns:
@@ -648,39 +669,43 @@ class RX(nn.Module):
                 k_val = self.k_map[i]
                 # Check that the specified levels are valid.
                 if j_val >= d or k_val >= d:
-                    raise ValueError(f"For qudit {i} with dimension {d}, the target levels j={j_val} and k={k_val} are out of range.")
+                    raise ValueError(
+                        f"For qudit {i} with dimension {d}, the target levels j={j_val} and k={k_val} are out of range."
+                    )
                 # Build indices for updating the matrix:
                 # We want to update:
                 #   (j, j) and (k, k) -> cos(angle/2)
                 #   (j, k) and (k, j) -> -i sin(angle/2)
-                indices = torch.tensor([[j_val, k_val, j_val, k_val],
-                                        [j_val, k_val, k_val, j_val]], device=x.device)
+                indices = torch.tensor(
+                    [[j_val, k_val, j_val, k_val], [j_val, k_val, k_val, j_val]],
+                    device=x.device,
+                )
                 values = torch.zeros(4, dtype=torch.complex64, device=x.device)
                 # Use the provided parameter or the internal angle for qudit i.
                 angle_val = self.angle[i] if param is False else param[i]
-                values[0] = torch.cos(angle_val/2)
-                values[1] = torch.cos(angle_val/2)
-                values[2] = -1j * torch.sin(angle_val/2)
-                values[3] = -1j * torch.sin(angle_val/2)
+                values[0] = torch.cos(angle_val / 2)
+                values[1] = torch.cos(angle_val / 2)
+                values[2] = -1j * torch.sin(angle_val / 2)
+                values[3] = -1j * torch.sin(angle_val / 2)
                 # Create a d x d identity matrix (dense or sparse as required).
                 M = aux.eye(dim=d, device=x.device, sparse=self.sparse)
                 # Update the entries corresponding to the rotation subspace.
-                M.index_put_(tuple(indices), values)
+                if self.sparse:
+                    M = aux.sparse_index_put(M, indices, values, self.device)
+                else:
+                    M.index_put_(tuple(indices), values)
                 # Incorporate this qudit's operation into the overall unitary.
                 U = aux.kron(U, M, sparse=self.sparse)
             else:
                 # For non-target qudits, use the identity matrix of appropriate dimension.
-                M = aux.eye(dim=(d if isinstance(self.dim, int) else self.dim[i]),
-                            device=x.device, sparse=self.sparse)
+                M = aux.eye(
+                    dim=(d if isinstance(self.dim, int) else self.dim[i]),
+                    device=x.device,
+                    sparse=self.sparse,
+                )
                 U = aux.kron(U, M, sparse=self.sparse)
         return U @ x
 
-
-import torch
-import torch.nn as nn
-import numpy as np
-import math
-from math import log
 
 class RY(nn.Module):
     r"""
@@ -690,7 +715,7 @@ class RY(nn.Module):
     For a qubit (2-level system), the matrix representation is given by
 
     .. math::
-        
+
             RY(\theta) = 
             \begin{pmatrix}
             \cos(\theta/2) & -\sin(\theta/2) \\
@@ -714,8 +739,8 @@ class RY(nn.Module):
             The total number of qudits in the circuit (used when `dim` is an integer).
         device (str): 
             The device on which computations are performed. Default is 'cpu'.
-        angle (float or bool): 
-            The rotation angle. If False, the angle is learned as a parameter; otherwise, the given angle is used.
+        angle (float or torch.Tensor or None): 
+            The rotation angle. If None, create a random parameter, if float or torch.Tensor, use it directly.
         sparse (bool): 
             Whether to use a sparse matrix representation. Default is False.
 
@@ -743,7 +768,17 @@ class RY(nn.Module):
         >>> print(result)
     """
 
-    def __init__(self, j=0, k=1, index=[0], dim=2, wires=1, device='cpu', angle=False, sparse=False):
+    def __init__(
+        self,
+        j=0,
+        k=1,
+        index=[0],
+        dim=2,
+        wires=1,
+        device="cpu",
+        angle=None,
+        sparse=False,
+    ):
         super(RY, self).__init__()
         self.device = device
         self.sparse = sparse
@@ -764,18 +799,24 @@ class RY(nn.Module):
             self.j_map = {t: int(j) for t in self.index}
         else:
             if len(j) != len(self.index):
-                raise ValueError("If 'j' is provided as a list, its length must equal the number of target qudits in 'index'.")
+                raise ValueError(
+                    "If 'j' is provided as a list, its length must equal the number of target qudits in 'index'."
+                )
             self.j_map = {t: int(j_val) for t, j_val in zip(self.index, j)}
         if isinstance(k, int):
             self.k_map = {t: int(k) for t in self.index}
         else:
             if len(k) != len(self.index):
-                raise ValueError("If 'k' is provided as a list, its length must equal the number of target qudits in 'index'.")
+                raise ValueError(
+                    "If 'k' is provided as a list, its length must equal the number of target qudits in 'index'."
+                )
             self.k_map = {t: int(k_val) for t, k_val in zip(self.index, k)}
 
         # Initialize the rotation angle parameter.
-        if angle is False:
+        if angle is None:
             self.angle = nn.Parameter(torch.randn(num_wires, device=device))
+        elif isinstance(angle, torch.Tensor):
+            self.angle = angle
         else:
             self.angle = nn.Parameter(angle * torch.ones(num_wires, device=device))
 
@@ -784,10 +825,10 @@ class RY(nn.Module):
         Apply the RY gate to the qudit state.
 
         Args:
-            x (torch.Tensor): 
+            x (torch.Tensor):
                 The input state tensor (a column vector) whose dimension is the product of the individual
                 qudit dimensions.
-            param (torch.Tensor or bool): 
+            param (torch.Tensor or bool):
                 If False, use the internal angle parameter; if provided, use it as the rotation angle.
 
         Returns:
@@ -810,27 +851,38 @@ class RY(nn.Module):
                 j_val = self.j_map[i]
                 k_val = self.k_map[i]
                 if j_val >= d or k_val >= d:
-                    raise ValueError(f"For qudit {i} with dimension {d}, the target levels j={j_val} and k={k_val} are out of range.")
+                    raise ValueError(
+                        f"For qudit {i} with dimension {d}, the target levels j={j_val} and k={k_val} are out of range."
+                    )
                 # Build indices for updating the submatrix:
                 #   (j,j) and (k,k) -> cos(angle/2)
                 #   (j,k) -> -sin(angle/2)
                 #   (k,j) -> sin(angle/2)
-                indices = torch.tensor([[j_val, k_val, j_val, k_val],
-                                        [j_val, k_val, k_val, j_val]], device=x.device)
+                indices = torch.tensor(
+                    [[j_val, k_val, j_val, k_val], [j_val, k_val, k_val, j_val]],
+                    device=x.device,
+                )
                 values = torch.zeros(4, dtype=torch.complex64, device=x.device)
                 angle_val = self.angle[i] if param is False else param[i]
-                values[0] = torch.cos(angle_val/2)
-                values[1] = torch.cos(angle_val/2)
-                values[2] = -torch.sin(angle_val/2)
-                values[3] = torch.sin(angle_val/2)
+                values[0] = torch.cos(angle_val / 2)
+                values[1] = torch.cos(angle_val / 2)
+                values[2] = -torch.sin(angle_val / 2)
+                values[3] = torch.sin(angle_val / 2)
                 # Create a d x d identity matrix.
                 M = aux.eye(dim=d, device=x.device, sparse=self.sparse)
                 # Update the specified entries.
-                M.index_put_(tuple(indices), values)
+                if self.sparse:
+                    M = aux.sparse_index_put(M, indices, values, self.device)
+                else:
+                    M.index_put_(tuple(indices), values)
+
                 U = aux.kron(U, M, sparse=self.sparse)
             else:
-                M = aux.eye(dim=(d if isinstance(self.dim, int) else self.dim[i]),
-                            device=x.device, sparse=self.sparse)
+                M = aux.eye(
+                    dim=(d if isinstance(self.dim, int) else self.dim[i]),
+                    device=x.device,
+                    sparse=self.sparse,
+                )
                 U = aux.kron(U, M, sparse=self.sparse)
         return U @ x
 
@@ -843,7 +895,7 @@ class RZ(nn.Module):
     For a qubit (2-level system), the matrix representation is given by
 
     .. math::
-        
+
             RZ(\theta) = 
             \begin{pmatrix}
             e^{-i\theta/2} & 0 \\
@@ -866,8 +918,8 @@ class RZ(nn.Module):
             The total number of qudits in the circuit (used when `dim` is an integer).
         device (str): 
             The device on which computations are performed. Default is 'cpu'.
-        angle (float or bool): 
-            The rotation angle. If False, the angle is learned as a parameter; otherwise, the given angle is used.
+        angle (float or torch.Tensor or None): 
+            The rotation angle. If None, create a random parameter, if float or torch.Tensor, use it directly.
         sparse (bool): 
             Whether to use a sparse matrix representation. Default is False.
 
@@ -895,7 +947,9 @@ class RZ(nn.Module):
         >>> print(result)
     """
 
-    def __init__(self, j=1, index=[0], dim=2, wires=1, device='cpu', angle=False, sparse=False):
+    def __init__(
+        self, j=1, index=[0], dim=2, wires=1, device="cpu", angle=None, sparse=False
+    ):
         super(RZ, self).__init__()
         self.sparse = sparse
         self.index = index
@@ -915,12 +969,16 @@ class RZ(nn.Module):
             self.j_map = {t: int(j) for t in self.index}
         else:
             if len(j) != len(self.index):
-                raise ValueError("If 'j' is provided as a list, its length must equal the number of target qudits in 'index'.")
+                raise ValueError(
+                    "If 'j' is provided as a list, its length must equal the number of target qudits in 'index'."
+                )
             self.j_map = {t: int(j_val) for t, j_val in zip(self.index, j)}
 
         # Initialize the rotation angle parameter.
-        if angle is False:
+        if angle is None:
             self.angle = nn.Parameter(torch.randn(num_wires, device=device))
+        elif isinstance(angle, torch.Tensor):
+            self.angle = angle
         else:
             self.angle = nn.Parameter(angle * torch.ones(num_wires, device=device))
 
@@ -929,10 +987,10 @@ class RZ(nn.Module):
         Apply the RZ gate to the qudit state.
 
         Args:
-            x (torch.Tensor): 
+            x (torch.Tensor):
                 The input state tensor (a column vector) whose dimension is the product of the individual
                 qudit dimensions.
-            param (torch.Tensor or bool): 
+            param (torch.Tensor or bool):
                 If False, use the internal angle parameter; if provided, use it as the rotation angle.
 
         Returns:
@@ -945,7 +1003,7 @@ class RZ(nn.Module):
             L = len(self.dim)
 
         U = aux.eye(1, device=x.device, sparse=self.sparse)
-        
+
         for i in range(L):
             # Determine dimension for qudit i.
             d = self.dim if isinstance(self.dim, int) else self.dim[i]
@@ -953,7 +1011,9 @@ class RZ(nn.Module):
                 # Get target level for this qudit.
                 j_val = self.j_map[i]
                 if j_val < 0 or j_val >= d:
-                    raise ValueError(f"For qudit {i} with dimension {d}, the target level j={j_val} is out of range.")
+                    raise ValueError(
+                        f"For qudit {i} with dimension {d}, the target level j={j_val} is out of range."
+                    )
                 # Determine rotation angle for this qudit.
                 angle_val = self.angle[i] if param is False else param[i]
                 # Build the d x d RZ matrix.
@@ -961,12 +1021,20 @@ class RZ(nn.Module):
                     # For qubits, use the standard formulation.
                     # If j_val==0, use diag(e^{iθ/2}, e^{-iθ/2}); if j_val==1, use diag(e^{-iθ/2}, e^{iθ/2}).
                     if j_val == 0:
-                        phase0 = torch.exp(1j * angle_val/2)
-                        phase1 = torch.exp(-1j * angle_val/2)
+                        phase0 = torch.exp(1j * angle_val / 2)
+                        phase1 = torch.exp(-1j * angle_val / 2)
                     else:
-                        phase0 = torch.exp(-1j * angle_val/2)
-                        phase1 = torch.exp(1j * angle_val/2)
-                    M = torch.diag(torch.tensor([phase0, phase1], dtype=torch.complex64, device=x.device))
+                        phase0 = torch.exp(-1j * angle_val / 2)
+                        phase1 = torch.exp(1j * angle_val / 2)
+                    M = torch.diag(
+                        torch.tensor(
+                            [phase0, phase1],
+                            dtype=torch.complex64,
+                            device=x.device,
+                        )
+                    )
+                    if self.sparse:
+                        M = M.to_sparse()
                 else:
                     # For d > 2, build an identity and update only the j-th diagonal element.
                     M = aux.eye(dim=d, device=x.device, sparse=self.sparse)
@@ -974,12 +1042,21 @@ class RZ(nn.Module):
                     # (This simple choice applies a phase rotation only on the j-th level.)
                     phase = torch.exp(1j * angle_val)
                     # M[j_val, j_val] is replaced.
-                    M.index_put_( (torch.tensor([j_val], device=x.device),
-                                   torch.tensor([j_val], device=x.device)), torch.tensor(phase, dtype=torch.complex64, device=x.device) )
+                    M.index_put_(
+                        (
+                            torch.tensor([j_val], device=x.device),
+                            torch.tensor([j_val], device=x.device),
+                        ),
+                        torch.tensor(phase, dtype=torch.complex64, device=x.device),
+                    )
                 U = aux.kron(U, M, sparse=self.sparse)
             else:
                 # Use identity for non-target qudits.
-                M = aux.eye(dim=(d if isinstance(self.dim, int) else self.dim[i]), device=x.device, sparse=self.sparse)
+                M = aux.eye(
+                    dim=(d if isinstance(self.dim, int) else self.dim[i]),
+                    device=x.device,
+                    sparse=self.sparse,
+                )
                 U = aux.kron(U, M, sparse=self.sparse)
         return U @ x
 
@@ -1023,7 +1100,9 @@ class CNOT(nn.Module):
         >>> print(result)
     """
 
-    def __init__(self, index=[0,1], wires=2, dim=2, device='cpu', sparse=False, inverse=False):
+    def __init__(
+        self, index=[0, 1], wires=2, dim=2, device="cpu", sparse=False, inverse=False
+    ):
         super(CNOT, self).__init__()
         self.index = index
         self.wires = wires
@@ -1039,7 +1118,9 @@ class CNOT(nn.Module):
             else:
                 dims_list = dim
                 if len(dims_list) != wires:
-                    raise ValueError("For multidimensional qudits, length of dim list must equal wires.")
+                    raise ValueError(
+                        "For multidimensional qudits, length of dim list must equal wires."
+                    )
 
             # Generate the full computational basis as a tensor.
             # Each row corresponds to one computational basis element.
@@ -1056,8 +1137,11 @@ class CNOT(nn.Module):
             # indices is a boolean matrix of shape (num_basis, num_basis).
             indices = torch.all(L[:, None, :] == l2ns[None, :, :], dim=2)
             # Create U as a complex tensor.
-            U = torch.where(indices, torch.tensor([1.0+0j], dtype=torch.complex64), 
-                                     torch.tensor([0.0], dtype=torch.complex64)).to(device)
+            U = torch.where(
+                indices,
+                torch.tensor([1.0 + 0j], dtype=torch.complex64),
+                torch.tensor([0.0], dtype=torch.complex64),
+            ).to(device)
         # Sparse matrix implementation (if provided, user must update aux.CNOT_sparse for multidimensional support)
         else:
             # We assume aux.CNOT_sparse is updated to handle a list for dims.
@@ -1067,7 +1151,7 @@ class CNOT(nn.Module):
         if inverse:
             U = torch.conj(U).T.contiguous()
 
-        self.register_buffer('U', U)
+        self.register_buffer("U", U)
 
     def forward(self, x):
         """
@@ -1090,16 +1174,16 @@ class CZ(nn.Module):
     For qubits, it recovers the standard controlled-Z behavior. For qudits, the gate is defined such that
     if the control qudit (at index `index[0]`) is in state \(|c\rangle\) and the target qudit (at index
     `index[1]`) is in state \(|t\rangle\), then the target qudit is acted upon by a Z rotation:
-    
+
     .. math::
           |c,t\rangle \to \left(|c\rangle\langle c| \otimes Z_t(c)\right)|c,t\rangle,
-    
+
     where the target qudit receives a phase shift determined by \(c\). In our implementation, for each
     possible control state \(c\), we construct the operator
 
     .. math::
           u_c = \bigotimes_{i=0}^{wires-1} U_i,
-    
+
     with
       - \(U_i =\) the projector \(|c\rangle\langle c|\) on the control qudit (if \(i = index[0]\)),
       - \(U_i =\) the Z gate \(Z(s=c)\) on the target qudit (if \(i = index[1]\)), and
@@ -1134,8 +1218,8 @@ class CZ(nn.Module):
         >>> result = gate(state)
         >>> print(result)
     """
-    
-    def __init__(self, index=[0, 1], dim=2, wires=2, device='cpu'):
+
+    def __init__(self, index=[0, 1], dim=2, wires=2, device="cpu"):
         super(CZ, self).__init__()
 
         # Process dimensions: if dim is an int, create a list of that dimension.
@@ -1162,7 +1246,9 @@ class CZ(nn.Module):
                 if i == index[0]:
                     # For the control qudit, use the projector onto state |c_val>.
                     # aux.base(dim, device) returns a list of basis column vectors.
-                    proj = aux.base(dims_list[i], device=device)[c_val]  # shape (dims_list[i], 1)
+                    proj = aux.base(dims_list[i], device=device)[
+                        c_val
+                    ]  # shape (dims_list[i], 1)
                     P = proj @ proj.T.conj()  # projector matrix
                     u = torch.kron(u, P)
                 elif i == index[1]:
@@ -1171,11 +1257,13 @@ class CZ(nn.Module):
                     u = torch.kron(u, M)
                 else:
                     # For other qudits, use the identity.
-                    u = torch.kron(u, torch.eye(dims_list[i], device=device, dtype=torch.complex64))
+                    u = torch.kron(
+                        u, torch.eye(dims_list[i], device=device, dtype=torch.complex64)
+                    )
             U += u
 
-        self.register_buffer('U', U)
-    
+        self.register_buffer("U", U)
+
     def forward(self, x):
         """
         Apply the CZ gate to the qudit state.
@@ -1200,9 +1288,9 @@ class SWAP(nn.Module):
     **Details:**
 
     For a qubit system (2-level qudits), the SWAP gate is represented as:
-    
+
     .. math::
-          
+
             SWAP = 
             \begin{pmatrix}
             1 & 0 & 0 & 0 \\
@@ -1239,7 +1327,7 @@ class SWAP(nn.Module):
         >>> print(result)
     """
 
-    def __init__(self, index=[0,1], dim=2, wires=2, device='cpu'):
+    def __init__(self, index=[0, 1], dim=2, wires=2, device="cpu"):
         super(SWAP, self).__init__()
         c = index[0]  # first qudit to swap
         t = index[1]  # second qudit to swap
@@ -1258,14 +1346,16 @@ class SWAP(nn.Module):
         # Build the SWAP gate by looping over each basis state.
         # The helper functions aux.dec2den and aux.den2dec must be updated to accept dims_list.
         for k in range(D):
-            localr = aux.dec2den(k, wires, dims_list)  # Convert from decimal to local qudit representation.
+            # Convert from decimal to local qudit representation.
+            localr = aux.dec2den(k, wires, dims_list)
             locall = localr.copy()
             # Swap the values at positions c and t.
             locall[c], locall[t] = localr[t], localr[c]
-            globall = aux.den2dec(locall, dims_list)  # Convert back to a decimal index.
+            # Convert back to a decimal index.
+            globall = aux.den2dec(locall, dims_list)
             U[globall, k] = 1
 
-        self.register_buffer('U', U)
+        self.register_buffer("U", U)
 
     def forward(self, x):
         """
@@ -1321,7 +1411,9 @@ class CRX(nn.Module):
         >>> print(result)
     """
 
-    def __init__(self, index=[0,1], dim=2, wires=2, j=0, k=1, device='cpu', sparse=False):
+    def __init__(
+        self, index=[0, 1], dim=2, wires=2, j=0, k=1, device="cpu", sparse=False
+    ):
         super(CRX, self).__init__()
         self.index = index
         self.wires = wires
@@ -1363,7 +1455,8 @@ class CRX(nn.Module):
         # Build dims for subspace excluding the target qudit.
         dims_without_target = self.dims_list.copy()
         del dims_without_target[t]
-        Dl = int(np.prod(dims_without_target))  # number of basis states for all qudits except target
+        # number of basis states for all qudits except target
+        Dl = int(np.prod(dims_without_target))
 
         indices_list = []
         values_list = []
@@ -1394,8 +1487,9 @@ class CRX(nn.Module):
             # We build a 2x2 block:
             # [ cos(angle)    -i sin(angle) ]
             # [ -i sin(angle)  cos(angle)    ]
-            base_indices = torch.tensor([[intj, intk, intj, intk],
-                                         [intj, intk, intk, intj]], device=x.device)
+            base_indices = torch.tensor(
+                [[intj, intk, intj, intk], [intj, intk, intk, intj]], device=x.device
+            )
             base_values = torch.zeros(4, dtype=torch.complex64, device=x.device)
             base_values[0] = torch.cos(angle_val)
             base_values[1] = torch.cos(angle_val)
@@ -1415,7 +1509,12 @@ class CRX(nn.Module):
                     new_index = torch.tensor([[intl]], device=x.device)
                     # We need to add the same index for both row and column.
                     indices = torch.cat((indices, new_index.expand(2, -1)), dim=1)
-                    values = torch.cat((values, torch.tensor([1.0], dtype=torch.complex64, device=x.device)))
+                    values = torch.cat(
+                        (
+                            values,
+                            torch.tensor([1.0], dtype=torch.complex64, device=x.device),
+                        )
+                    )
             indices_list.append(indices)
             values_list.append(values)
 
@@ -1474,7 +1573,9 @@ class CRY(nn.Module):
         >>> print(result)
     """
 
-    def __init__(self, index=[0,1], dim=2, wires=2, j=0, k=1, device='cpu', sparse=False):
+    def __init__(
+        self, index=[0, 1], dim=2, wires=2, j=0, k=1, device="cpu", sparse=False
+    ):
         super(CRY, self).__init__()
         self.index = index
         self.wires = wires
@@ -1484,7 +1585,7 @@ class CRY(nn.Module):
         self.k = k
         # Learnable rotation angle.
         self.angle = nn.Parameter(np.pi * torch.randn(1, device=device))
-        
+
         # Process dimensions: if dim is an int, create a list.
         if isinstance(dim, int):
             self.dims_list = [dim] * wires
@@ -1511,15 +1612,15 @@ class CRY(nn.Module):
         # Total Hilbert space dimension.
         D = int(np.prod(self.dims_list))
         U = torch.zeros((D, D), dtype=torch.complex64, device=x.device)
-        
+
         # Build the reduced dimensions: remove the target qudit.
         dims_without_target = self.dims_list.copy()
         del dims_without_target[t]
         Dl = int(np.prod(dims_without_target))
-        
+
         # For the control qudit in the reduced space, if its original index is after the target, subtract one.
         c_reduced = c if c < t else c - 1
-        
+
         indices_list = []
         values_list = []
 
@@ -1536,14 +1637,15 @@ class CRY(nn.Module):
             listj = local.copy()
             listj.insert(t, self.j)
             intj = aux.den2dec(listj, self.dims_list)
-            
+
             listk = local.copy()
             listk.insert(t, self.k)
             intk = aux.den2dec(listk, self.dims_list)
 
             # Construct a 2x2 submatrix for the target qudit.
-            indices = torch.tensor([[intj, intk, intj, intk],
-                                      [intj, intk, intk, intj]], device=x.device)
+            indices = torch.tensor(
+                [[intj, intk, intj, intk], [intj, intk, intk, intj]], device=x.device
+            )
             values = torch.zeros(4, dtype=torch.complex64, device=x.device)
             values[0] = torch.cos(angle_val)
             values[1] = torch.cos(angle_val)
@@ -1559,8 +1661,13 @@ class CRY(nn.Module):
                     new_index = torch.tensor([[intl]], device=x.device)
                     # Add the diagonal element 1.
                     indices = torch.cat((indices, new_index.expand(2, -1)), dim=1)
-                    values = torch.cat((values, torch.tensor([1.0], dtype=torch.complex64, device=x.device)))
-            
+                    values = torch.cat(
+                        (
+                            values,
+                            torch.tensor([1.0], dtype=torch.complex64, device=x.device),
+                        )
+                    )
+
             indices_list.append(indices)
             values_list.append(values)
 
@@ -1615,7 +1722,7 @@ class CRZ(nn.Module):
         >>> print(result)
     """
 
-    def __init__(self, index=[0, 1], dim=2, wires=2, j=1, device='cpu', sparse=False):
+    def __init__(self, index=[0, 1], dim=2, wires=2, j=1, device="cpu", sparse=False):
         super(CRZ, self).__init__()
         self.index = index
         self.j = j
@@ -1624,7 +1731,7 @@ class CRZ(nn.Module):
         self.sparse = sparse
         # Learnable rotation angle.
         self.angle = nn.Parameter(np.pi * torch.randn(1, device=device))
-        
+
         # Process dimensions: if dim is an int, convert to list.
         if isinstance(dim, int):
             self.dims_list = [dim] * wires
@@ -1648,20 +1755,20 @@ class CRZ(nn.Module):
 
         # Total Hilbert space dimension.
         D = int(np.prod(self.dims_list))
-        
+
         # Build reduced dimensions (exclude target qudit).
         dims_without_target = self.dims_list.copy()
         del dims_without_target[t]
         Dl = int(np.prod(dims_without_target))
-        
+
         # Prepare lists to accumulate indices and values.
         indices = []
         values = []
-        
+
         # Iterate over the reduced basis of all qudits except target.
         # Adjust control index in reduced space: if control index > target, then reduced index is c-1.
         c_reduced = c if c < t else c - 1
-        
+
         for m in range(Dl):
             # Get the multi-index for the reduced space.
             local = aux.dec2den(m, self.wires - 1, dims_without_target)
@@ -1673,7 +1780,7 @@ class CRZ(nn.Module):
             # Compute the rotation angle as a function of the control value.
             # The factor np.sqrt(2/(j*(j+1))) is kept from the original code.
             angle = ((loc * self.angle) / 2) * np.sqrt(2 / (self.j * (self.j + 1)))
-            
+
             # Loop over the possible levels for the target qudit.
             for k_val in range(self.dims_list[t]):
                 listk = local.copy()
@@ -1691,21 +1798,21 @@ class CRZ(nn.Module):
                     phase = 1.0
                 indices.append([intk, intk])
                 values.append(phase)
-        
+
         # Convert indices and values to tensors.
         indices = torch.tensor(indices, dtype=torch.long, device=x.device).T
         values = torch.tensor(values, dtype=torch.complex64, device=x.device)
         mask = (indices[0] >= 0) & (indices[1] >= 0)
         indices = indices[:, mask]
         values = values[mask]
-        
+
         # Build the operator U.
         if not self.sparse:
             U = torch.zeros((D, D), dtype=torch.complex64, device=x.device)
             U.index_put_(tuple(indices), values)
         else:
             U = torch.sparse_coo_tensor(indices, values, (D, D), device=x.device)
-        
+
         return U @ x
 
 
@@ -1720,7 +1827,7 @@ class CCNOT(nn.Module):
 
     .. math::
           |c_1\, c_2\, t\rangle \to |c_1\, c_2\, ((c_1 \times c_2) + t) \mod d_t\rangle,
-    
+
     where \(d_t\) is the dimension of the target qudit.
 
     **Arguments:**
@@ -1752,9 +1859,9 @@ class CCNOT(nn.Module):
         >>> print(result)
     """
 
-    def __init__(self, index=[0,1,2], dim=2, wires=3, inverse=False, device='cpu'):
+    def __init__(self, index=[0, 1, 2], dim=2, wires=3, inverse=False, device="cpu"):
         super(CCNOT, self).__init__()
-        
+
         # Process dimensions: if an integer is given, make a list.
         if isinstance(dim, int):
             dims_list = [dim] * wires
@@ -1770,22 +1877,29 @@ class CCNOT(nn.Module):
         # Total Hilbert space dimension.
         D = int(np.prod(dims_list))
         # Generate the full computational basis.
-        basis = torch.tensor(list(itertools.product(*[range(d) for d in dims_list]))).to(device)
+        basis = torch.tensor(
+            list(itertools.product(*[range(d) for d in dims_list]))
+        ).to(device)
         # Make a copy that will be modified.
         basis_modified = basis.clone()
         # Update the target qudit entry.
         target_dim = dims_list[index[2]]
         # Here, we perform: new_target = (control1 * control2 + target) mod (target_dim)
-        basis_modified[:, index[2]] = (basis[:, index[0]] * basis[:, index[1]] + basis[:, index[2]]) % target_dim
+        basis_modified[:, index[2]] = (
+            basis[:, index[0]] * basis[:, index[1]] + basis[:, index[2]]
+        ) % target_dim
 
         # Build the unitary matrix: for each pair (i,j) we set U[i,j] = 1 if basis[i] == modified_basis[j]
         eq_matrix = torch.all(basis[:, None, :] == basis_modified[None, :, :], dim=2)
-        U = torch.where(eq_matrix, torch.tensor(1.0+0j, dtype=torch.complex64, device=device),
-                               torch.tensor(0.0, dtype=torch.complex64, device=device))
+        U = torch.where(
+            eq_matrix,
+            torch.tensor(1.0 + 0j, dtype=torch.complex64, device=device),
+            torch.tensor(0.0, dtype=torch.complex64, device=device),
+        )
         if inverse:
             U = torch.conj(U).T.contiguous()
-        self.register_buffer('U', U)
-        
+        self.register_buffer("U", U)
+
     def forward(self, x):
         """
         Apply the CCNOT gate to the qudit state.
@@ -1797,7 +1911,6 @@ class CCNOT(nn.Module):
             torch.Tensor: The resulting state after applying the CCNOT gate.
         """
         return self.U @ x
-
 
 
 class MCX(nn.Module):
@@ -1843,10 +1956,10 @@ class MCX(nn.Module):
         >>> result = gate(state)
         >>> print(result)
     """
-    
-    def __init__(self, index=[0, 1], dim=2, wires=2, inverse=False, device='cpu'):
+
+    def __init__(self, index=[0, 1], dim=2, wires=2, inverse=False, device="cpu"):
         super(MCX, self).__init__()
-        
+
         # If dim is an integer, create a list of equal dimensions.
         if isinstance(dim, int):
             dims_list = [dim] * wires
@@ -1854,20 +1967,22 @@ class MCX(nn.Module):
             dims_list = dim
             if len(dims_list) != wires:
                 raise ValueError("Length of dim list must equal the number of wires.")
-                
+
         self.index = index
         self.dims_list = dims_list
         self.device = device
 
         # Total Hilbert space dimension.
-        D = int(np.prod(dims_list))
-        
+        # D = int(np.prod(dims_list))
+
         # Generate the full computational basis.
         # Each row is a tuple representing a basis state.
-        basis = torch.tensor(list(itertools.product(*[range(d) for d in dims_list]))).to(device)
+        basis = torch.tensor(
+            list(itertools.product(*[range(d) for d in dims_list]))
+        ).to(device)
         # Make a copy that will be modified.
         basis_modified = basis.clone()
-        
+
         # Compute the product of the control qudit values.
         control_value = 1
         for i in range(len(index) - 1):
@@ -1875,16 +1990,21 @@ class MCX(nn.Module):
         # For the target qudit (index[-1]), update its value:
         # new_target = (control_value + original_target) mod (target qudit dimension)
         target_dim = dims_list[index[-1]]
-        basis_modified[:, index[-1]] = (control_value + basis_modified[:, index[-1]]) % target_dim
-        
+        basis_modified[:, index[-1]] = (
+            control_value + basis_modified[:, index[-1]]
+        ) % target_dim
+
         # Build the unitary matrix.
         eq_matrix = torch.all(basis[:, None, :] == basis_modified[None, :, :], dim=2)
-        U = torch.where(eq_matrix, torch.tensor(1.0+0j, dtype=torch.complex64, device=device),
-                               torch.tensor(0.0, dtype=torch.complex64, device=device))
+        U = torch.where(
+            eq_matrix,
+            torch.tensor(1.0 + 0j, dtype=torch.complex64, device=device),
+            torch.tensor(0.0, dtype=torch.complex64, device=device),
+        )
         if inverse:
             U = torch.conj(U).T.contiguous()
-        self.register_buffer('U', U)
-        
+        self.register_buffer("U", U)
+
     def forward(self, x):
         """
         Apply the MCX gate to the qudit state.
@@ -1896,7 +2016,6 @@ class MCX(nn.Module):
             torch.Tensor: The resulting state after applying the MCX gate.
         """
         return self.U @ x
-
 
 
 class U(nn.Module):
@@ -1928,12 +2047,13 @@ class U(nn.Module):
         >>> psi = qf.State('0-1-0', dim=2)
         >>> result = gate(psi)
     """
-    def __init__(self, dim=2, wires=1, device='cpu', index=None):
+
+    def __init__(self, dim=2, wires=1, device="cpu", index=None):
         super(U, self).__init__()
         # Process dimensions: if dim is an int, build a list.
         if isinstance(dim, int):
             self.dims_list = [dim] * wires
-            total_dim = dim ** wires
+            total_dim = dim**wires
             self.wires = wires
         else:
             self.dims_list = dim
@@ -1941,12 +2061,14 @@ class U(nn.Module):
             total_dim = int(np.prod(dim))
         self.device = device
         self.index = index  # if None, act on full system
-        
+
         if self.index is None:
             # Generate a random unitary on the full Hilbert space.
-            U_rand = aux.eye(dim=total_dim, sparse=False, device=device) \
-                     + torch.randn((total_dim, total_dim), device=device) \
-                     + 1j * torch.randn((total_dim, total_dim), device=device)
+            U_rand = (
+                aux.eye(dim=total_dim, sparse=False, device=device)
+                + torch.randn((total_dim, total_dim), device=device)
+                + 1j * torch.randn((total_dim, total_dim), device=device)
+            )
             # We'll store the parameter; the final unitary is computed by exponentiation.
             self.U_full = nn.Parameter(U_rand)
         else:
@@ -1954,11 +2076,13 @@ class U(nn.Module):
             # Compute the subspace dimension.
             sub_dims = [self.dims_list[i] for i in self.index]
             sub_total = int(np.prod(sub_dims))
-            U_rand = aux.eye(dim=sub_total, sparse=False, device=device) \
-                     + torch.randn((sub_total, sub_total), device=device) \
-                     + 1j * torch.randn((sub_total, sub_total), device=device)
+            U_rand = (
+                aux.eye(dim=sub_total, sparse=False, device=device)
+                + torch.randn((sub_total, sub_total), device=device)
+                + 1j * torch.randn((sub_total, sub_total), device=device)
+            )
             self.U_sub = nn.Parameter(U_rand)
-            
+
     def forward(self, x):
         if self.index is None:
             # Full-system unitary.
@@ -1984,12 +2108,16 @@ class U(nn.Module):
             permuted = state_tensor.permute(*new_order).contiguous()
             # Reshape: first part (subspace) and second part (complement).
             d_sub = int(np.prod([self.dims_list[i] for i in self.index]))
-            d_rem = int(np.prod([self.dims_list[i] for i in remaining])) if remaining else 1
+            d_rem = (
+                int(np.prod([self.dims_list[i] for i in remaining])) if remaining else 1
+            )
             A = permuted.view(d_sub, d_rem)
             # Apply U_sub on the subspace.
             A_new = U_sub_unitary @ A
             # Reshape back.
-            new_shape = [self.dims_list[i] for i in self.index] + [self.dims_list[i] for i in remaining]
+            new_shape = [self.dims_list[i] for i in self.index] + [
+                self.dims_list[i] for i in remaining
+            ]
             permuted_new = A_new.view(*new_shape)
             # Inverse permute to restore original ordering.
             state_new = permuted_new.permute(*inv_order).contiguous().view(-1, 1)
@@ -2029,15 +2157,18 @@ class CU(nn.Module):
         >>> psi = State('2-1-3', dim=[3,2,4])
         >>> result = gate(psi)
     """
-    def __init__(self, dim=2, wires=1, device='cpu', index=None):
+
+    def __init__(self, dim=2, wires=1, device="cpu", index=None):
         super(CU, self).__init__()
         if index is None:
-            raise ValueError("The 'index' parameter must be specified as a list of qudit indices.")
+            raise ValueError(
+                "The 'index' parameter must be specified as a list of qudit indices."
+            )
         # Here, the first element is the control, the rest are targets.
         self.index = index
         self.control_index = index[0]
         self.target_index = index[1:]
-        
+
         # Process dimensions.
         if isinstance(dim, int):
             self.dims_list = [dim] * wires
@@ -2051,12 +2182,18 @@ class CU(nn.Module):
         self.d_control = self.dims_list[self.control_index]
         self.d_target = int(np.prod([self.dims_list[i] for i in self.target_index]))
         self.sub_dim = self.d_control * self.d_target
-        
+
         # For each control state k, define a learnable parameter for a matrix of size (d_target x d_target).
         self.U_blocks_param = nn.Parameter(
-            torch.randn(self.d_control, self.d_target, self.d_target, device=device, dtype=torch.complex64)
+            torch.randn(
+                self.d_control,
+                self.d_target,
+                self.d_target,
+                device=device,
+                dtype=torch.complex64,
+            )
         )
-        
+
     def forward(self, x):
         # Permute the qudits so that the controlled subsystem (control and targets) are at the front.
         all_indices = list(range(self.wires))
@@ -2064,7 +2201,7 @@ class CU(nn.Module):
         remaining = [i for i in all_indices if i not in sub_indices]
         new_order = sub_indices + remaining
         inv_order = [new_order.index(i) for i in range(self.wires)]
-        
+
         # Reshape x into tensor with shape given by dims_list.
         state_tensor = x.view(*self.dims_list)
         # Permute so that control and target qudits come first.
@@ -2073,11 +2210,11 @@ class CU(nn.Module):
         d_sub = int(np.prod([self.dims_list[i] for i in sub_indices]))
         d_rem = int(np.prod([self.dims_list[i] for i in remaining])) if remaining else 1
         A = permuted.view(d_sub, d_rem)
-        
+
         # Split the subspace into control and target parts.
         # The control part has dimension self.d_control, and the target part has dimension self.d_target.
         A = A.view(self.d_control, self.d_target, d_rem)
-        
+
         # For each control state k, generate the unitary block.
         U_blocks = []
         for k in range(self.d_control):
@@ -2086,15 +2223,19 @@ class CU(nn.Module):
             U_k = torch.matrix_exp(A_k - torch.conj(A_k).T)
             U_blocks.append(U_k)
         # Build a block-diagonal unitary on the subspace.
-        U_sub = torch.block_diag(*U_blocks)  # shape: (d_control*d_target, d_control*d_target)
-        
+        # shape: (d_control*d_target, d_control*d_target)
+        U_sub = torch.block_diag(*U_blocks)
+
         # Reshape the subspace part to a matrix.
         A_sub = A.view(self.sub_dim, d_rem)
         # Apply the controlled unitary.
         A_new = U_sub @ A_sub
         # Reshape back.
-        new_shape = [self.d_control] + [self.dims_list[i] for i in self.target_index] + \
-                    ([self.dims_list[i] for i in remaining] if remaining else [])
+        new_shape = (
+            [self.d_control]
+            + [self.dims_list[i] for i in self.target_index]
+            + ([self.dims_list[i] for i in remaining] if remaining else [])
+        )
         permuted_new = A_new.view(*new_shape)
         # Inverse permute to restore original ordering.
         state_new = permuted_new.permute(*inv_order).contiguous().view(-1, 1)
@@ -2141,7 +2282,8 @@ class CustomGate(nn.Module):
         >>> result = gate(state)
         >>> print(result)
     """
-    def __init__(self, M, dim=2, wires=1, index=0, device='cpu'):
+
+    def __init__(self, M, dim=2, wires=1, index=0, device="cpu"):
         super(CustomGate, self).__init__()
         self.M = M.type(torch.complex64).to(device)
         self.index = index
@@ -2169,5 +2311,10 @@ class CustomGate(nn.Module):
             if i == self.index:
                 U = torch.kron(U, self.M)
             else:
-                U = torch.kron(U, torch.eye(self.dims_list[i], dtype=torch.complex64, device=x.device))
+                U = torch.kron(
+                    U,
+                    torch.eye(
+                        self.dims_list[i], dtype=torch.complex64, device=x.device
+                    ),
+                )
         return U @ x
