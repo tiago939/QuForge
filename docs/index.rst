@@ -1,18 +1,15 @@
-.. QuForge documentation master file, created by
-   sphinx-quickstart on Wed Jul 31 09:53:05 2024.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+Welcome to QuForge's Documentation!
+=====================================
 
-Welcome to QuForge's documentation!
-===================================
+QuForge is a Python library for simulating qudit systems. This documentation covers the modules and usage examples.
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
    gates
-
-
+   circuit
+   examples
 
 Indices and tables
 ==================

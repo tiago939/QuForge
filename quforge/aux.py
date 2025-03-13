@@ -339,7 +339,7 @@ def sparse_index_put(M, indices, values, device):
     unique, inverse = torch.unique(flat_indices, return_inverse=True, sorted=False)
     last_occurrences = torch.zeros_like(unique, dtype=torch.long)
     last_occurrences[inverse] = torch.arange(
-        len(flat_indices)
+        len(flat_indices), device=device
     )  # Stores last occurrence index
 
     # Gather the latest indices and values

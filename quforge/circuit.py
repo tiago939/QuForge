@@ -81,7 +81,11 @@ class Circuit(nn.Module):
             **kwargs: Additional arguments for the gate.
         """
         gate = module(
-            dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs
+            dim=self.dim,
+            wires=self.wires,
+            device=self.device,
+            sparse=self.sparse,
+            **kwargs
         )
         self.circuit.add_module(str(len(self.circuit)), gate)
 
@@ -96,87 +100,137 @@ class Circuit(nn.Module):
         self.circuit.add_module(str(len(self.circuit)), gate)
 
     def H(self, **kwargs):
-        self.add_gate(gates.H(dim=self.dim, device=self.device, **kwargs))
+        self.add_gate(
+            gates.H(dim=self.dim, wires=self.wires, device=self.device, **kwargs)
+        )
 
     def X(self, **kwargs):
-        self.add_gate(gates.X(dim=self.dim, device=self.device, **kwargs))
+        self.add_gate(
+            gates.X(dim=self.dim, wires=self.wires, device=self.device, **kwargs)
+        )
 
     def Y(self, **kwargs):
-        self.add_gate(gates.Y(dim=self.dim, device=self.device, **kwargs))
+        self.add_gate(
+            gates.Y(dim=self.dim, wires=self.wires, device=self.device, **kwargs)
+        )
 
     def Z(self, **kwargs):
-        self.add_gate(gates.Z(dim=self.dim, device=self.device, **kwargs))
+        self.add_gate(
+            gates.Z(dim=self.dim, wires=self.wires, device=self.device, **kwargs)
+        )
 
     def RX(self, **kwargs):
         self.add_gate(
             gates.RX(
-                dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs
+                dim=self.dim,
+                wires=self.wires,
+                device=self.device,
+                sparse=self.sparse,
+                **kwargs
             )
         )
 
     def RY(self, **kwargs):
         self.add_gate(
             gates.RY(
-                dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs
+                dim=self.dim,
+                wires=self.wires,
+                device=self.device,
+                sparse=self.sparse,
+                **kwargs
             )
         )
 
     def RZ(self, **kwargs):
         self.add_gate(
             gates.RZ(
-                dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs
+                dim=self.dim,
+                wires=self.wires,
+                device=self.device,
+                sparse=self.sparse,
+                **kwargs
             )
         )
 
     def CNOT(self, **kwargs):
         self.add_gate(
             gates.CNOT(
-                dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs
+                dim=self.dim,
+                wires=self.wires,
+                device=self.device,
+                sparse=self.sparse,
+                **kwargs
             )
         )
 
     def SWAP(self, **kwargs):
-        self.add_gate(gates.SWAP(dim=self.dim, wires=self.wires, device=self.device, **kwargs))
+        self.add_gate(
+            gates.SWAP(dim=self.dim, wires=self.wires, device=self.device, **kwargs)
+        )
 
     def CZ(self, **kwargs):
-        self.add_gate(gates.CZ(dim=self.dim, wires=self.wires, device=self.device, **kwargs))
+        self.add_gate(
+            gates.CZ(dim=self.dim, wires=self.wires, device=self.device, **kwargs)
+        )
 
     def CCNOT(self, **kwargs):
-        self.add_gate(gates.CCNOT(dim=self.dim, device=self.device, **kwargs))
+        self.add_gate(
+            gates.CCNOT(dim=self.dim, wires=self.wires, device=self.device, **kwargs)
+        )
 
     def MCX(self, **kwargs):
-        self.add_gate(gates.MCX(dim=self.dim, wires=self.wires, device=self.device, **kwargs))
+        self.add_gate(
+            gates.MCX(dim=self.dim, wires=self.wires, device=self.device, **kwargs)
+        )
 
     def CRX(self, **kwargs):
         self.add_gate(
             gates.CRX(
-                dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs
+                dim=self.dim,
+                wires=self.wires,
+                device=self.device,
+                sparse=self.sparse,
+                **kwargs
             )
         )
 
     def CRY(self, **kwargs):
         self.add_gate(
             gates.CRY(
-                dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs
+                dim=self.dim,
+                wires=self.wires,
+                device=self.device,
+                sparse=self.sparse,
+                **kwargs
             )
         )
 
     def CRZ(self, **kwargs):
         self.add_gate(
             gates.CRZ(
-                dim=self.dim, wires=self.wires, device=self.device, sparse=self.sparse, **kwargs
+                dim=self.dim,
+                wires=self.wires,
+                device=self.device,
+                sparse=self.sparse,
+                **kwargs
             )
         )
 
     def U(self, **kwargs):
-        self.add_gate(gates.U(dim=self.dim, wires=self.wires, device=self.device, **kwargs))
+        self.add_gate(
+            gates.U(dim=self.dim, wires=self.wires, device=self.device, **kwargs)
+        )
 
     def CU(self, **kwargs):
-        self.add_gate(gates.CU(dim=self.dim, wires=self.wires, device=self.device, **kwargs))
+        self.add_gate(
+            gates.CU(dim=self.dim, wires=self.wires, device=self.device, **kwargs)
+        )
 
     def Custom(self, **kwargs):
         self.add_gate(
-            gates.CustomGate(dim=self.dim, wires=self.wires, device=self.device, **kwargs)
+            gates.CustomGate(
+                dim=self.dim, wires=self.wires, device=self.device, **kwargs
+            )
         )
 
     def forward(self, x):

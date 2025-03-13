@@ -10,10 +10,6 @@ def State(*args, **kwargs):
     return sv.State(*args, **kwargs)
 
 
-def I(*args, **kwargs):
-    return gates.I(*args, **kwargs)
-
-
 def H(*args, **kwargs):
     return gates.H(*args, **kwargs)
 
@@ -66,10 +62,6 @@ def CRZ(*args, **kwargs):
     return gates.CRZ(*args, **kwargs)
 
 
-def CU(*args, **kwargs):
-    return gates.CU(*args, **kwargs)
-
-
 def CCNOT(*args, **kwargs):
     return gates.CCNOT(*args, **kwargs)
 
@@ -82,12 +74,24 @@ def U(*args, **kwargs):
     return gates.U(*args, **kwargs)
 
 
+def CU(*args, **kwargs):
+    return gates.CU(*args, **kwargs)
+
+
+def CustomGate(*args, **kwargs):
+    return gates.CustomGate(*args, **kwargs)
+
+
 def Circuit(*args, **kwargs):
     return circuit.Circuit(*args, **kwargs)
 
 
 def measure(*args, **kwargs):
     return sv.measure(*args, **kwargs)
+
+
+def exp_value(*args, **kwargs):
+    return sv.exp_value(*args, **kwargs)
 
 
 def optim(*args, **kwargs):
