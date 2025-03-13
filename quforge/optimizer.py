@@ -1,5 +1,6 @@
 import torch
 
+
 class OptimizerFactory:
     """
     A factory class for creating PyTorch optimizers.
@@ -16,15 +17,14 @@ class OptimizerFactory:
     Example:
         >>> optimizer = OptimizerFactory.get_optimizer('Adam', model.parameters(), lr=0.001)
     """
-    
+
     @staticmethod
     def get_optimizer(optimizer_name, *args, **kwargs):
-        if optimizer_name == 'Adam':
+        if optimizer_name == "Adam":
             return torch.optim.Adam(*args, **kwargs)
-        elif optimizer_name == 'SGD':
+        if optimizer_name == "SGD":
             return torch.optim.SGD(*args, **kwargs)
-        else:
-            raise ValueError(f"Optimizer '{optimizer_name}' is not supported")
+        raise ValueError(f"Optimizer '{optimizer_name}' is not supported")
 
 
 class optim:
@@ -33,7 +33,7 @@ class optim:
 
     This class provides static methods that serve as shorthand for creating PyTorch optimizers using the
     OptimizerFactory. Currently supported optimizers include:
-    
+
         - Adam
         - SGD
 
@@ -41,6 +41,10 @@ class optim:
         >>> optimizer = qf.optim.Adam(model.parameters(), lr=0.001)
         >>> optimizer = qf.optim.SGD(model.parameters(), lr=0.01)
     """
-    Adam = staticmethod(lambda *args, **kwargs: OptimizerFactory.get_optimizer('Adam', *args, **kwargs))
-    SGD = staticmethod(lambda *args, **kwargs: OptimizerFactory.get_optimizer('SGD', *args, **kwargs))
 
+    Adam = staticmethod(
+        lambda *args, **kwargs: OptimizerFactory.get_optimizer("Adam", *args, **kwargs)
+    )
+    SGD = staticmethod(
+        lambda *args, **kwargs: OptimizerFactory.get_optimizer("SGD", *args, **kwargs)
+    )
