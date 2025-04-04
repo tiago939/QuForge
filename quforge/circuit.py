@@ -47,7 +47,6 @@ class Circuit(nn.Module):
         CRZ(**kwargs): Add a controlled rotation-Z gate to the circuit.
         U(**kwargs): Add a universal gate to the circuit.
         CU(**kwargs): Add a controlled-universal gate to the circuit.
-        Custom(**kwargs): Add a custom gate to the circuit.
 
     **Example:**
         >>> import quforge.quforge as qf
@@ -224,13 +223,6 @@ class Circuit(nn.Module):
     def CU(self, **kwargs):
         self.add_gate(
             gates.CU(dim=self.dim, wires=self.wires, device=self.device, **kwargs)
-        )
-
-    def Custom(self, **kwargs):
-        self.add_gate(
-            gates.CustomGate(
-                dim=self.dim, wires=self.wires, device=self.device, **kwargs
-            )
         )
 
     def forward(self, x):

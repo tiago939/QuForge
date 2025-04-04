@@ -288,26 +288,6 @@ def CNOT_sparse(c, t, d, n, device="cpu"):
     return eye_sparse
 
 
-class Module(nn.Module):
-    def __init__(self):
-        super(Module, self).__init__()
-
-
-class ModuleList(nn.ModuleList):
-    def __init__(self, *args, **kwargs):
-        super(ModuleList, self).__init__(*args, **kwargs)
-
-
-class Linear(nn.Linear):
-    def __init__(self, in_features, out_features, bias=True):
-        super(Linear, self).__init__(in_features, out_features, bias)
-
-
-class Sequential(nn.Sequential):
-    def __init__(self, *args):
-        super(Sequential, self).__init__(*args)
-
-
 def sparse_index_put(M, indices, values, device):
     """
     Updates a sparse tensor M by replacing values at given indices.

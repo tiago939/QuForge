@@ -646,3 +646,8 @@ def show(
         latex_state = " + ".join(group_terms)
         latex_state = latex_state.replace("+ -", "- ")
         return latex_state
+
+
+def fidelity(x, y):
+    F = abs(x.conj().T @ y)**2
+    return F

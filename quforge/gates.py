@@ -786,7 +786,7 @@ class RX(nn.Module):
                 )
                 values = torch.zeros(4, dtype=torch.complex64, device=x.device)
                 # Use the provided parameter or the internal angle for qudit i.
-                angle_val = self.angle[i] if param is None else param[i]
+                angle_val = self.angle[i] if param is None else torch.tensor(param[i], device=self.device)
                 values[0] = torch.cos(angle_val / 2)
                 values[1] = torch.cos(angle_val / 2)
                 values[2] = -1j * torch.sin(angle_val / 2)
@@ -1236,7 +1236,7 @@ class RZ(nn.Module):
                         f"For qudit {i} with dimension {d}, the target level j={j_val} is out of range."
                     )
                 # Determine rotation angle for this qudit.
-                angle_val = self.angle[i] if param is None else param[i]
+                angle_val = self.angle[i] if param is None else torch.tensor(param[i], device=self.device)
                 # Build the d x d RZ matrix.
                 if d == 2:
                     # For qubits, use the standard formulation.
@@ -2680,210 +2680,297 @@ class MCX(nn.Module):
 
 class U(nn.Module):
     r"""
-    Universal (U) Gate for qudits.
+    Random or Custom Unitary Gate for qudits.
 
-    This gate generates a random unitary operator on the Hilbert space of a set of qudits.
-    The user may choose to have the gate act on the entire system or only on a specified subset
-    of qudits via the `index` flag.
+    This gate can either apply a user-provided unitary matrix or, if no matrix is provided,
+    generate a random unitary operator on the Hilbert space of a set of qudits. The gate can be
+    applied on the entire system or on a specified subset of qudits via the `index` flag.
 
     **Arguments:**
-        dim (int or list of int): The dimension of the qudits. If an integer is provided, all qudits
-                                  are assumed to have that dimension. If a list is provided, each element
-                                  specifies the dimension of a corresponding qudit.
-        wires (int): The number of qudits in the circuit (used only when `dim` is an integer). If `dim` is a list,
-                     wires is taken as the length of the list.
+        matrix (torch.Tensor or None): The custom unitary matrix to be applied as the gate.
+            If None (default), a random unitary is generated (via a random parameter that is
+            exponentiated to produce a unitary).
+        dim (int or list of int): The dimension(s) of the qudits. If an integer is provided, all qudits
+            are assumed to have that dimension; if a list is provided, each element specifies the dimension
+            of a corresponding qudit.
+        wires (int): The total number of qudits in the circuit (used only when `dim` is an integer).
         device (str): The device on which computations are performed (e.g. 'cpu' or 'cuda').
-        index (list of int or None): The list of qudit indices on which to apply the random unitary.
-                                     If None, the gate acts on the entire system. Default is None.
+        index (int, list of int, or None): The index/indices of the qudit(s) on which to apply the gate.
+            If None, the gate acts on the entire system. For a single index, an integer can be provided.
+            For a subset, provide a list of indices.
 
-    **Example:**
-        >>> # Full system (e.g. 3 qudits all with dimension 2)
-        >>> gate = qf.U(dim=2, wires=3, device='cpu')
-        >>> psi = qf.State('0-1-0', dim=2)
-        >>> result = gate(psi)
+    **Examples:**
+        >>> # Full-system custom gate (acting on 3 qudits, each with dimension 2)
+        >>> custom_matrix = torch.tensor(np.eye(2**3), dtype=torch.complex64)
+        >>> gate = U(matrix=custom_matrix, dim=2, wires=3, device='cpu')
+        >>> state = ...  # some state of dimension 2**3
+        >>> result = gate(state)
         >>>
-        >>> # Only apply a random unitary on qudits 1 and 2 of a 3-qudit system.
-        >>> gate = qf.U(dim=2, wires=3, device='cpu', index=[1,2])
-        >>> psi = qf.State('0-1-0', dim=2)
-        >>> result = gate(psi)
+        >>> # Full-system random gate (acting on 3 qudits, each with dimension 2)
+        >>> gate = U(matrix=None, dim=2, wires=3, device='cpu')
+        >>>
+        >>> # Custom gate acting only on qudits 0 and 2 of a 3-qudit system
+        >>> custom_matrix = torch.tensor(np.eye(2*2), dtype=torch.complex64)  # 4x4 matrix
+        >>> gate = U(matrix=custom_matrix, dim=2, wires=3, index=[0,2], device='cpu')
+        >>>
+        >>> # Random gate acting only on qudits 1 and 2 of a 3-qudit system
+        >>> gate = U(matrix=None, dim=2, wires=3, index=[1,2], device='cpu')
     """
 
-    def __init__(self, dim=2, wires=1, device="cpu", index=None):
+    def __init__(self, matrix=None, dim=2, wires=1, device="cpu", index=None):
         super(U, self).__init__()
-        # Process dimensions: if dim is an int, build a list.
+        self.device = device
+
+        # Process dimensions: if dim is an int, assume all qudits share that dimension.
         if isinstance(dim, int):
             self.dims_list = [dim] * wires
-            total_dim = dim**wires
             self.wires = wires
         else:
             self.dims_list = dim
             self.wires = len(dim)
-            total_dim = int(np.prod(dim))
-        self.device = device
-        self.index = index  # if None, act on full system
 
-        if self.index is None:
-            # Generate a random unitary on the full Hilbert space.
-            U_rand = (
-                aux.eye(dim=total_dim, sparse=False, device=device)
-                + torch.randn((total_dim, total_dim), device=device)
-                + 1j * torch.randn((total_dim, total_dim), device=device)
-            )
-            # We'll store the parameter; the final unitary is computed by exponentiation.
-            self.U_full = nn.Parameter(U_rand)
+        # Process the index flag.
+        if index is None:
+            self.indices = None  # acts on the full Hilbert space
+        elif isinstance(index, int):
+            self.indices = [index]
         else:
-            # Build a random unitary on the subspace corresponding to the specified indices.
-            # Compute the subspace dimension.
-            sub_dims = [self.dims_list[i] for i in self.index]
-            sub_total = int(np.prod(sub_dims))
-            U_rand = (
-                aux.eye(dim=sub_total, sparse=False, device=device)
-                + torch.randn((sub_total, sub_total), device=device)
-                + 1j * torch.randn((sub_total, sub_total), device=device)
-            )
-            self.U_sub = nn.Parameter(U_rand)
+            self.indices = list(index)
+            self.indices.sort()
+
+        # Compute full Hilbert space dimension.
+        self.total_dim = int(np.prod(self.dims_list))
+
+        # If acting on a subspace, determine its dimension.
+        if self.indices is None:
+            self.sub_dim = self.total_dim
+        else:
+            sub_dims = [self.dims_list[i] for i in self.indices]
+            self.sub_dim = int(np.prod(sub_dims))
+
+        # Flag to denote whether we are using a random (parametrized) unitary.
+        self.random = matrix is None
+
+        if self.random:
+            # If no matrix is provided, build a random gate.
+            if self.indices is None:
+                # Full system: parameter is a total_dim x total_dim complex matrix.
+                U_rand = (torch.eye(self.total_dim, device=device, dtype=torch.complex64) +
+                          torch.randn((self.total_dim, self.total_dim), device=device, dtype=torch.complex64))
+                self.U_param = nn.Parameter(U_rand)
+            else:
+                # Subsystem: parameter is a sub_dim x sub_dim complex matrix.
+                U_rand = (torch.eye(self.sub_dim, device=device, dtype=torch.complex64) +
+                          torch.randn((self.sub_dim, self.sub_dim), device=device, dtype=torch.complex64))
+                self.U_param = nn.Parameter(U_rand)
+        else:
+            # Use the provided unitary matrix.
+            # Ensure that the provided matrix is a torch tensor on the correct device and in complex64.
+            self.M = torch.tensor(matrix, device=device, dtype=torch.complex64)
+            # Verify that the matrix has the expected dimensions.
+            if self.indices is None:
+                if self.M.shape[0] != self.total_dim or self.M.shape[1] != self.total_dim:
+                    raise ValueError("Provided matrix dimensions do not match the full Hilbert space dimension.")
+            else:
+                if self.M.shape[0] != self.sub_dim or self.M.shape[1] != self.sub_dim:
+                    raise ValueError("Provided matrix dimensions do not match the product of the targeted qudits' dimensions.")
 
     def forward(self, x):
-        if self.index is None:
-            # Full-system unitary.
-            U_param = self.U_full - torch.conj(self.U_full.T)
-            U_final = torch.matrix_exp(U_param)
+        """
+        Apply the unitary gate to the state x.
+
+        Args:
+            x (torch.Tensor): The input state vector (as a column vector) with dimension equal to
+                the product of the individual qudit dimensions.
+        Returns:
+            torch.Tensor: The transformed state vector.
+        """
+        if self.indices is None:
+            # The unitary acts on the full Hilbert space.
+            if self.random:
+                # Unitarize the parameter: make it skew-Hermitian then exponentiate.
+                U_param = 0.5 * (self.U_param - torch.conj(self.U_param.T))
+                U_final = torch.matrix_exp(U_param)
+            else:
+                U_final = self.M
             return U_final @ x
+
+        # Otherwise, the unitary acts on a subsystem.
+        # Permute the state so that the targeted qudits are in the front.
+        all_indices = list(range(self.wires))
+        target_indices = self.indices
+        remaining_indices = [i for i in all_indices if i not in target_indices]
+        new_order = target_indices + remaining_indices
+        # Inverse permutation for later.
+        inv_order = [new_order.index(i) for i in range(self.wires)]
+
+        # Reshape the input state vector into a tensor with shape given by dims_list.
+        psi = x.view(*self.dims_list)
+        psi_perm = psi.permute(*new_order).contiguous()
+
+        # Flatten into (sub_dim, rest_dim) where sub_dim is for targeted qudits.
+        d_rest = self.total_dim // self.sub_dim
+        psi_flat = psi_perm.reshape(self.sub_dim, d_rest)
+
+        # Get the unitary acting on the subspace.
+        if self.random:
+            U_param = self.U_param - torch.conj(self.U_param.T)
+            U_sub = torch.matrix_exp(U_param)
         else:
-            # The unitary acts only on a subset of qudits.
-            # First, compute the unitary on the subspace.
-            U_param = self.U_sub - torch.conj(self.U_sub.T)
-            U_sub_unitary = torch.matrix_exp(U_param)
-            # Now, embed this subspace unitary into the full Hilbert space.
-            # To do so, we permute the state so that the target qudits appear as the leading subsystems.
-            all_indices = list(range(self.wires))
-            # new_order: first the indices in self.index, then the remaining indices.
-            remaining = [i for i in all_indices if i not in self.index]
-            new_order = self.index + remaining
-            # Inverse permutation: for later restoring original order.
-            inv_order = [new_order.index(i) for i in range(self.wires)]
-            # Reshape x into a tensor with shape self.dims_list.
-            state_tensor = x.view(*self.dims_list)
-            # Permute so that the qudits to be acted upon are first.
-            permuted = state_tensor.permute(*new_order).contiguous()
-            # Reshape: first part (subspace) and second part (complement).
-            d_sub = int(np.prod([self.dims_list[i] for i in self.index]))
-            d_rem = (
-                int(np.prod([self.dims_list[i] for i in remaining])) if remaining else 1
-            )
-            A = permuted.view(d_sub, d_rem)
-            # Apply U_sub on the subspace.
-            A_new = U_sub_unitary @ A
-            # Reshape back.
-            new_shape = [self.dims_list[i] for i in self.index] + [
-                self.dims_list[i] for i in remaining
-            ]
-            permuted_new = A_new.view(*new_shape)
-            # Inverse permute to restore original ordering.
-            state_new = permuted_new.permute(*inv_order).contiguous().view(-1, 1)
-            return state_new
+            U_sub = self.M
+
+        # Apply the subspace unitary.
+        psi_transformed = U_sub @ psi_flat
+
+        # Reshape back to the permuted tensor shape.
+        new_shape = [self.dims_list[i] for i in new_order]
+        psi_perm_transformed = psi_transformed.reshape(*new_shape)
+
+        # Inverse permute to restore the original ordering.
+        psi_final = psi_perm_transformed.permute(*inv_order).contiguous()
+
+        return psi_final.view(self.total_dim, 1)
 
     def matrix(self):
         """
-        Retrieve the full unitary matrix representation of the U gate.
+        Construct and return the full unitary matrix representation of the gate.
 
         Returns:
-            torch.Tensor: The unitary matrix representing the U gate.
+            torch.Tensor: The full unitary matrix.
         """
+        if self.indices is None:
+            # Full Hilbert space.
+            if self.random:
+                U_param = 0.5 * (self.U_param - torch.conj(self.U_param.T))
+                U_full = torch.matrix_exp(U_param)
+            else:
+                U_full = self.M
+            return U_full
 
-        # Full-system unitary.
-        if self.index is None:
-            U_param = self.U_full - torch.conj(self.U_full.T)
-            U_final = torch.matrix_exp(U_param)
-            return U_final
+        # For a gate that acts on a subset, we embed the subspace unitary.
+        # Determine the unitary acting on the targeted qudits.
+        if self.random:
+            U_param = self.U_param - torch.conj(self.U_param.T)
+            U_sub = torch.matrix_exp(U_param)
         else:
-            # Compute the unitary on the subspace.
-            U_param = self.U_sub - torch.conj(self.U_sub.T)
-            U_sub_unitary = torch.matrix_exp(U_param)
+            U_sub = self.M
 
-            # Define permutation: bring the qudits specified in self.index to the front.
-            all_indices = list(range(self.wires))
-            remaining = [i for i in all_indices if i not in self.index]
-            new_order = self.index + remaining  # new ordering
-            # Total Hilbert space dimension.
-            total_dim = int(np.prod(self.dims_list))
-            # Dimensions of the subspace and its complement.
-            d_sub = int(np.prod([self.dims_list[i] for i in self.index]))
-            d_rem = (
-                int(np.prod([self.dims_list[i] for i in remaining])) if remaining else 1
-            )
+        # Build the permutation matrix P that maps basis states to a permuted ordering
+        # with the targeted qudits first.
+        total_dim = self.total_dim
+        dims = self.dims_list
 
-            # Construct the permutation vector.
-            # For each basis vector (represented by its multi-index), compute its new decimal index.
-            basis_indices = list(itertools.product(*[range(d) for d in self.dims_list]))
-            perm = []
-            for m in basis_indices:
-                m = list(m)
-                permuted = [m[i] for i in new_order]
-                new_dec = aux.den2dec(permuted, self.dims_list)
-                perm.append(new_dec)
-            perm = torch.tensor(perm, dtype=torch.long, device=self.device)
-            # Build permutation matrix P of size (total_dim, total_dim).
-            P = torch.zeros(
-                (total_dim, total_dim), dtype=torch.complex64, device=self.device
-            )
-            for i in range(total_dim):
-                P[i, perm[i]] = 1.0
+        # Create the permutation by mapping each multi-index.
+        basis_indices = list(itertools.product(*[range(d) for d in dims]))
+        perm = []
+        # Define new order: target indices first, then the rest.
+        all_indices = list(range(self.wires))
+        target_indices = self.indices
+        remaining_indices = [i for i in all_indices if i not in target_indices]
+        new_order = target_indices + remaining_indices
+        for m in basis_indices:
+            m = list(m)
+            permuted = [m[i] for i in new_order]
+            # Convert multi-index back to flat index (using dims of permuted order).
+            new_dec = 0
+            for idx, d in zip(permuted, [dims[i] for i in new_order]):
+                new_dec = new_dec * d + idx
+            perm.append(new_dec)
+        perm = torch.tensor(perm, dtype=torch.long, device=self.device)
 
-            # Compute the embedded unitary: act as U_sub_unitary on the subspace and as identity on the complement.
-            I_rem = torch.eye(d_rem, dtype=torch.complex64, device=self.device)
-            U_embedded = torch.kron(U_sub_unitary, I_rem)
-            # The overall unitary is given by P^T @ U_embedded @ P.
-            U_final = P.T @ U_embedded @ P
-            return U_final
+        # Build the permutation matrix P.
+        P = torch.zeros((total_dim, total_dim), dtype=torch.complex64, device=self.device)
+        for i in range(total_dim):
+            P[i, perm[i]] = 1.0
+
+        # Dimensions for the targeted subspace and its complement.
+        d_sub = self.sub_dim
+        d_rest = total_dim // d_sub
+        I_rest = torch.eye(d_rest, dtype=torch.complex64, device=self.device)
+        U_embedded = torch.kron(U_sub, I_rest)
+
+        # Embed the unitary: U_full = P^T @ U_embedded @ P.
+        U_full = P.T @ U_embedded @ P
+        return U_full
 
 
 class CU(nn.Module):
     r"""
-    Controlled-Universal (CU) Gate for qudits.
+    Controlled-Unitary (CU) Gate for qudits with configurable control branches.
 
     This gate applies a different unitary on a target subsystem depending on the state of a control qudit.
     The qudits affected by this gate are specified by a single list `index`, where the first element is the
-    control qudit and the remaining elements form the target subsystem. For each control state \(|k\rangle\)
-    (with \(k=0,\dots,d_c-1\), where \(d_c\) is the dimension of the control qudit), a corresponding unitary
-    \(U_k\) is applied on the target subsystem. The overall operator is given by
-
+    control qudit and the remaining elements are the target qudits. For a control qudit with dimension \(d_c\),
+    the ideal operation is:
+    
     .. math::
-          \text{CU} = \sum_{k=0}^{d_c-1} \, \Big(|k\rangle\langle k|\Big)_{\text{control}} \otimes U_k.
+       \mathrm{CU} = \sum_{k=0}^{d_c-1} |k\rangle\langle k| \otimes U_k.
+
+    With the new flag `control_dim`, the user specifies which control state(s) trigger a nontrivial unitary
+    on the target subsystem. For control states *not* in `control_dim` the gate acts as the identity.
+    
+    There are two modes:
+    
+    1. **Random (Learnable) Mode (`matrix=None`):**  
+       For each control state in `control_dim`, a learnable parameter (of shape \((d_{target}, d_{target})\))
+       is defined. Its skew-Hermitian part is exponentiated to yield a unitary. Control states not in
+       `control_dim` use the identity block.
+       
+       For example, with qubits and:
+       
+       - `index=[0,1]` and `control_dim=[1]`:  
+         \(\mathrm{CU} = |0\rangle\langle 0| \otimes I + |1\rangle\langle 1| \otimes U.\)
+       - `index=[0,1]` and `control_dim=[0]`:  
+         \(\mathrm{CU} = |0\rangle\langle 0| \otimes U + |1\rangle\langle 1| \otimes I.\)
+         
+    2. **Custom Matrix Mode (when `matrix` is provided):**  
+       The user must supply the active unitary blocks for the control states in `control_dim`. These can be
+       provided as either a list of matrices, a 3D tensor (with first dimension equal to len(`control_dim`)),
+       or a 2D tensor that packs the blocks. Blocks for control states not in `control_dim` are taken as identity.
 
     **Arguments:**
         dim (int or list of int): The dimension of each qudit. If an integer, all qudits are assumed to have that
-                                  dimension; if a list, each element specifies the dimension of the corresponding qudit.
-        wires (int): The total number of qudits in the system (used only when `dim` is an integer). If `dim` is a list,
-                     wires is taken as the length of that list.
+            dimension; if a list, each element specifies the dimension of the corresponding qudit.
+        wires (int): The total number of qudits in the system (used only when `dim` is an integer).
         device (str): The device on which computations are performed.
         index (list of int): A list specifying which qudits the gate acts on. The first element is the control qudit,
-                             and the remaining elements are the target qudits.
+            and the remaining elements are the target qudits.
+        matrix (torch.Tensor or list or None): If provided, a custom unitary is used for the active branches.
+            See discussion above.
+        control_dim (int or list of int or None): Specifies the control state(s) for which the gate applies the active
+            unitary. For control states not in this list, the identity is used. If not provided, a default is chosen:
+            for qubits, the default is `[1]`; for higher dimensions, the default is `[d_control - 1]`.
 
-    **Example:**
-        >>> # For a 3-qudit system (all qubits), applying the controlled unitary on qudits 1 and 2 with qudit 0 as control.
-        >>> gate = CU(dim=2, wires=3, device='cpu', index=[0, 1, 2])
-        >>> psi = State('0-1-0', dim=2)
-        >>> result = gate(psi)
+    **Examples:**
+        >>> # Error: index must contain at least one control and one target.
+        >>> U = CU(dim=2, wires=3, index=[0])  # Raises an error.
         >>>
-        >>> # For multidimensional qudits (e.g. dims = [3,2,4]): control is qudit 0 and targets are qudits 1 and 2.
-        >>> gate = CU(dim=[3,2,4], device='cpu', index=[0, 1, 2])
-        >>> psi = State('2-1-3', dim=[3,2,4])
-        >>> result = gate(psi)
+        >>> # For a 3-qudit system with control qudit 0 and target qudit 1,
+        >>> # using random parameters and default control_dim (for qubits, [1]):
+        >>> U = CU(dim=2, wires=3, index=[0,1])
+        >>>
+        >>> # For a 3-qudit system with control qudit 0 and target qudit 1,
+        >>> # but with identity applied on control state |1> (i.e. active unitary on state |0>):
+        >>> U = CU(dim=2, wires=3, index=[0,1], control_dim=[0])
+        >>>
+        >>> # For a 3-qudit system with control qudit 1 and target qudit 0,
+        >>> # with custom unitary blocks provided as a list (for control states in control_dim).
+        >>> custom_blocks = [torch.eye(2, dtype=torch.complex64), 0.5*torch.eye(2, dtype=torch.complex64)]
+        >>> U = CU(dim=2, wires=3, index=[1,0], control_dim=[0,1], matrix=custom_blocks)
     """
 
-    def __init__(self, dim=2, wires=2, device="cpu", index=[0, 1]):
+    def __init__(self, dim=2, wires=2, device="cpu", index=[0, 1], matrix=None, control_dim=None):
         super(CU, self).__init__()
-        if index is None:
-            raise ValueError(
-                "The 'index' parameter must be specified as a list of qudit indices."
-            )
-        # Here, the first element is the control, the rest are targets.
+        # Validate the index list.
+        if index is None or len(index) < 2:
+            raise ValueError("The 'index' parameter must be a list with at least two elements: one control and at least one target.")
+        
+        # First element is control; remaining are targets.
         self.index = index
         self.control_index = index[0]
         self.target_index = index[1:]
-
-        # Process dimensions.
+        
+        # Process qudit dimensions.
         if isinstance(dim, int):
             self.dims_list = [dim] * wires
             self.wires = wires
@@ -2892,220 +2979,156 @@ class CU(nn.Module):
             self.wires = len(dim)
         self.device = device
 
-        # Subspace dimensions.
+        # Dimensions of control and target subsystems.
         self.d_control = self.dims_list[self.control_index]
         self.d_target = int(np.prod([self.dims_list[i] for i in self.target_index]))
         self.sub_dim = self.d_control * self.d_target
 
-        # For each control state k, define a learnable parameter for a matrix of size (d_target x d_target).
-        self.U_blocks_param = nn.Parameter(
-            torch.randn(
-                self.d_control,
-                self.d_target,
-                self.d_target,
-                device=device,
-                dtype=torch.complex64,
+        # Process control_dim.
+        if control_dim is None:
+            # Default: for qubits, default to [1]; otherwise, use [d_control - 1].
+            self.control_dim = [1] if self.d_control == 2 else [self.d_control - 1]
+        elif isinstance(control_dim, int):
+            self.control_dim = [control_dim]
+        else:
+            self.control_dim = list(control_dim)
+        for ctrl_state in self.control_dim:
+            if ctrl_state < 0 or ctrl_state >= self.d_control:
+                raise ValueError("Each element in control_dim must lie in range [0, d_control-1].")
+        
+        # Determine mode: random (learnable) if matrix is None; otherwise custom.
+        if matrix is None:
+            self.random = True
+            # Learn parameters only for control states in icontrol_dim.
+            num_active = len(self.control_dim)
+            self.U_blocks_param = nn.Parameter(
+                torch.randn(num_active, self.d_target, self.d_target,
+                            device=device, dtype=torch.complex64)
             )
-        )
-
+        else:
+            self.random = False
+            # Process the provided custom matrix/blocks.
+            # The user must provide one block for each control state in control_dim.
+            if isinstance(matrix, list):
+                if len(matrix) != len(self.control_dim):
+                    raise ValueError("When providing a list, the number of matrices must equal len(control_dim).")
+                self.custom_blocks = {}
+                for i, ctrl_state in enumerate(self.control_dim):
+                    M = torch.tensor(matrix[i], device=device, dtype=torch.complex64)
+                    if M.shape != (self.d_target, self.d_target):
+                        raise ValueError("Each provided matrix must be of shape (d_target, d_target).")
+                    self.custom_blocks[ctrl_state] = M
+            elif isinstance(matrix, torch.Tensor):
+                if matrix.ndim == 3:
+                    if matrix.shape[0] != len(self.control_dim):
+                        raise ValueError("For a 3D tensor, the first dimension must equal len(control_dim).")
+                    self.custom_blocks = {}
+                    for i, ctrl_state in enumerate(self.control_dim):
+                        block = matrix[i]
+                        if block.shape != (self.d_target, self.d_target):
+                            raise ValueError("Each provided block must have shape (d_target, d_target).")
+                        self.custom_blocks[ctrl_state] = block
+                elif matrix.ndim == 2:
+                    expected = len(self.control_dim) * self.d_target
+                    if matrix.shape[0] != expected or matrix.shape[1] != expected:
+                        raise ValueError("For a 2D tensor, the shape must be (len(control_dim)*d_target, len(control_dim)*d_target).")
+                    self.custom_blocks = {}
+                    reshaped = matrix.view(len(self.control_dim), self.d_target, self.d_target)
+                    for i, ctrl_state in enumerate(self.control_dim):
+                        self.custom_blocks[ctrl_state] = reshaped[i]
+                else:
+                    raise ValueError("Provided matrix must be either a list of matrices, a 3D tensor, or a 2D tensor.")
+            else:
+                raise ValueError("Provided matrix must be either a list or a torch.Tensor.")
+    
     def forward(self, x):
-        # Permute the qudits so that the controlled subsystem (control and targets) are at the front.
+        # Permute qudits so that the controlled subsystem (control and targets) comes first.
         all_indices = list(range(self.wires))
         sub_indices = self.index  # control followed by targets
         remaining = [i for i in all_indices if i not in sub_indices]
         new_order = sub_indices + remaining
         inv_order = [new_order.index(i) for i in range(self.wires)]
-
-        # Reshape x into tensor with shape given by dims_list.
+        
+        # Reshape state into tensor of shape given by dims_list.
         state_tensor = x.view(*self.dims_list)
-        # Permute so that control and target qudits come first.
-        permuted = state_tensor.permute(*new_order).contiguous()
-        # Reshape into matrix: first part is subspace (control and target) and second part is the remainder.
+        psi_perm = state_tensor.permute(*new_order).contiguous()
         d_sub = int(np.prod([self.dims_list[i] for i in sub_indices]))
         d_rem = int(np.prod([self.dims_list[i] for i in remaining])) if remaining else 1
-        A = permuted.view(d_sub, d_rem)
-
-        # Split the subspace into control and target parts.
-        # The control part has dimension self.d_control, and the target part has dimension self.d_target.
+        A = psi_perm.view(d_sub, d_rem)
+        # Reshape controlled subsystem: control dimension and target.
         A = A.view(self.d_control, self.d_target, d_rem)
-
-        # For each control state k, generate the unitary block.
-        U_blocks = []
+        
+        # Build the controlled unitary for the subspace.
+        blocks = []
         for k in range(self.d_control):
-            A_k = self.U_blocks_param[k]
-            # Form a skew-Hermitian matrix and exponentiate.
-            U_k = torch.matrix_exp(A_k - torch.conj(A_k).T)
-            U_blocks.append(U_k)
-        # Build a block-diagonal unitary on the subspace.
-        # shape: (d_control*d_target, d_control*d_target)
-        U_sub = torch.block_diag(*U_blocks)
-
-        # Reshape the subspace part to a matrix.
-        A_sub = A.view(self.sub_dim, d_rem)
+            if k in self.control_dim:
+                # For active control states, use the learned/custom block.
+                if self.random:
+                    idx = self.control_dim.index(k)
+                    param = self.U_blocks_param[idx]
+                    U_k = torch.matrix_exp(param - torch.conj(param).T)
+                else:
+                    U_k = self.custom_blocks[k]
+            else:
+                # For inactive control states, use identity.
+                U_k = torch.eye(self.d_target, dtype=torch.complex64, device=self.device)
+            blocks.append(U_k)
+        # Assemble block-diagonal matrix with blocks in order for k=0,..., d_control-1.
+        U_sub = torch.block_diag(*blocks)  # shape: (d_control * d_target, d_control * d_target)
+        
         # Apply the controlled unitary.
+        A_sub = A.view(self.sub_dim, d_rem)
         A_new = U_sub @ A_sub
-        # Reshape back.
-        new_shape = (
-            [self.d_control]
-            + [self.dims_list[i] for i in self.target_index]
-            + ([self.dims_list[i] for i in remaining] if remaining else [])
-        )
-        permuted_new = A_new.view(*new_shape)
-        # Inverse permute to restore original ordering.
-        state_new = permuted_new.permute(*inv_order).contiguous().view(-1, 1)
-        return state_new
+        # Reshape and inverse-permute to original ordering.
+        new_shape = ([self.d_control] + [self.dims_list[i] for i in self.target_index] +
+                     ([self.dims_list[i] for i in remaining] if remaining else []))
+        psi_perm_new = A_new.view(*new_shape)
+        psi_final = psi_perm_new.permute(*inv_order).contiguous().view(-1, 1)
+        return psi_final
 
     def matrix(self):
         """
         Retrieve the full unitary matrix representation of the CU gate.
-
-        Returns:
-            torch.Tensor: The full unitary matrix representing the CU gate.
         """
-
-        # Compute the unitary blocks.
-        U_blocks = []
+        # Construct the controlled subspace unitary.
+        blocks = []
         for k in range(self.d_control):
-            A_k = self.U_blocks_param[k]
-            U_k = torch.matrix_exp(A_k - torch.conj(A_k).T)
-            U_blocks.append(U_k)
-        U_sub = torch.block_diag(
-            *U_blocks
-        )  # Shape: (d_control*d_target, d_control*d_target)
-
-        # Dimensions for the controlled subsystem.
-        d_sub = self.sub_dim  # d_control * d_target
-
-        # Determine remaining indices.
+            if k in self.control_dim:
+                if self.random:
+                    idx = self.control_dim.index(k)
+                    param = self.U_blocks_param[idx]
+                    U_k = torch.matrix_exp(param - torch.conj(param).T)
+                else:
+                    U_k = self.custom_blocks[k]
+            else:
+                U_k = torch.eye(self.d_target, dtype=torch.complex64, device=self.device)
+            blocks.append(U_k)
+        U_sub = torch.block_diag(*blocks)
+        
+        # Determine the remaining subsystem.
         all_indices = list(range(self.wires))
         remaining = [i for i in all_indices if i not in self.index]
         d_rem = int(np.prod([self.dims_list[i] for i in remaining])) if remaining else 1
-
-        # Embed the controlled unitary into the full Hilbert space.
-        # It acts as U_sub on the controlled subsystem and as identity on the complement.
         I_rem = torch.eye(d_rem, dtype=torch.complex64, device=self.device)
-        U_embedded = torch.kron(
-            U_sub, I_rem
-        )  # acts on controlled subsystem ⊗ complement
-
-        # Build the permutation matrix P that reorders qudits so that the controlled subsystem comes first.
+        U_embedded = torch.kron(U_sub, I_rem)
+        
+        # Build permutation matrix P to restore original qudit ordering.
         total_dim = int(np.prod(self.dims_list))
         new_order = self.index + [i for i in all_indices if i not in self.index]
         new_dims = [self.dims_list[i] for i in new_order]
-        # Construct permutation vector by reordering the multi-indices.
         basis_indices = list(itertools.product(*[range(d) for d in self.dims_list]))
         perm = []
         for m in basis_indices:
             m = list(m)
             permuted = [m[i] for i in new_order]
-            new_dec = aux.den2dec(permuted, new_dims)
+            new_dec = 0
+            for idx, d in zip(permuted, new_dims):
+                new_dec = new_dec * d + idx
             perm.append(new_dec)
         perm = torch.tensor(perm, dtype=torch.long, device=self.device)
-        # Build permutation matrix P.
-        P = torch.zeros(
-            (total_dim, total_dim), dtype=torch.complex64, device=self.device
-        )
+        P = torch.zeros((total_dim, total_dim), dtype=torch.complex64, device=self.device)
         for i in range(total_dim):
             P[i, perm[i]] = 1.0
-
-        # The full unitary is given by Pᵀ @ U_embedded @ P.
+        
         U_full = P.T @ U_embedded @ P
         return U_full
-
-
-class CustomGate(nn.Module):
-    r"""
-    Custom Quantum Gate for qudits.
-
-    The CustomGate class allows users to define and apply a custom quantum gate to a specific qudit
-    in a multi-qudit system. The gate applies a custom unitary matrix \(M\) to the qudit specified by
-    `index` while leaving all other qudits unchanged.
-
-    **Arguments:**
-        M (torch.Tensor): The custom matrix to be applied as the gate.
-        dim (int or list of int): The dimension of the qudits. If an integer, all qudits are assumed to have
-                                  that dimension; if a list is provided, each element specifies the dimension
-                                  of the corresponding qudit.
-        wires (int): The total number of qudits in the circuit (used only when `dim` is an integer).
-        index (int): The index of the qudit to which the custom gate is applied.
-        device (str): The device on which computations are performed. Default is 'cpu'.
-
-    **Attributes:**
-        M (torch.Tensor): The custom matrix for the gate.
-        dims_list (list of int): A list containing the dimension of each qudit.
-        index (int): The index of the qudit on which the custom gate acts.
-        wires (int): The total number of qudits in the system.
-        device (str): The device for computations.
-
-    **Examples:**
-        >>> custom_matrix = torch.tensor([[0, 1], [1, 0]])  # Example custom matrix for qubits.
-        >>> gate = qf.CustomGate(M=custom_matrix, dim=2, index=0, wires=2)
-        >>> state = qf.State('0-0', dim=2)
-        >>> result = gate(state)
-        >>> print(result)
-        >>>
-        >>> # For multidimensional qudits: first qudit is 3-dimensional, second is 2-dimensional.
-        >>> custom_matrix = torch.tensor([[0, 1, 0],
-        ...                                [1, 0, 0],
-        ...                                [0, 0, 1]])  # A 3x3 custom matrix.
-        >>> gate = qf.CustomGate(M=custom_matrix, dim=[3,2], index=0)
-        >>> state = qf.State('1-0', dim=[3,2])
-        >>> result = gate(state)
-        >>> print(result)
-    """
-
-    def __init__(self, matrix, dim=2, wires=1, index=0, device="cpu"):
-        super(CustomGate, self).__init__()
-        self.M = torch.tensor(matrix, device=device, dtype=torch.complex64)
-        self.index = index
-        self.device = device
-        # Process dimensions: if an integer is provided, assume all qudits share that dimension.
-        if isinstance(dim, int):
-            self.dims_list = [dim] * wires
-            self.wires = wires
-        else:
-            self.dims_list = dim
-            self.wires = len(dim)
-
-    def forward(self, x):
-        """
-        Apply the custom gate to the qudit state.
-
-        Args:
-            x (torch.Tensor): The input state tensor (a column vector) whose dimension is the product of the individual
-                              qudit dimensions.
-        Returns:
-            torch.Tensor: The resulting state after applying the custom gate.
-        """
-        U = torch.eye(1, dtype=torch.complex64, device=x.device)
-        for i in range(self.wires):
-            if i == self.index:
-                U = torch.kron(U, self.M)
-            else:
-                U = torch.kron(
-                    U,
-                    torch.eye(
-                        self.dims_list[i], dtype=torch.complex64, device=x.device
-                    ),
-                )
-        return U @ x
-
-    def matrix(self):
-        """
-        Construct and return the full unitary matrix representation of the custom gate.
-
-        Returns:
-            torch.Tensor: The full unitary matrix representing the custom gate.
-        """
-        U = torch.eye(1, dtype=torch.complex64, device=self.device)
-        for i in range(self.wires):
-            if i == self.index:
-                U = torch.kron(U, self.M)
-            else:
-                U = torch.kron(
-                    U,
-                    torch.eye(
-                        self.dims_list[i], dtype=torch.complex64, device=self.device
-                    ),
-                )
-        return U

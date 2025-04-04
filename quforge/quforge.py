@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import quforge.aux as aux
 import quforge.gates as gates
 import quforge.statevector as sv
@@ -78,10 +79,6 @@ def CU(*args, **kwargs):
     return gates.CU(*args, **kwargs)
 
 
-def CustomGate(*args, **kwargs):
-    return gates.CustomGate(*args, **kwargs)
-
-
 def Circuit(*args, **kwargs):
     return circuit.Circuit(*args, **kwargs)
 
@@ -106,9 +103,44 @@ def sum(*args, **kwargs):
     return torch.sum(*args, **kwargs)
 
 
+def mean(*args, **kwargs):
+    return torch.mean(*args, **kwargs)
+
+
 def kron(*args, **kwargs):
     return aux.kron(*args, **kwargs)
 
 
 def eye(*args, **kwargs):
     return aux.eye(*args, **kwargs)
+
+
+def zeros(shape, device='cpu', dtype=torch.float32):
+    return torch.zeros(shape, device=device, dtype=dtype)
+
+
+def ones(shape, device='cpu', dtype=torch.float32):
+    return torch.ones(shape, device=device, dtype=dtype)
+
+
+def Tensor(x, device='cpu', dtype=torch.float32):
+    return torch.Tensor(x, device=device, dtype=dtype)
+
+
+def argmax(x):
+    return torch.argmax(x)
+
+
+class Module(nn.Module):
+    def __init__(self):
+        super(Module, self).__init__()
+
+
+class ModuleList(nn.ModuleList):
+    def __init__(self, *args, **kwargs):
+        super(ModuleList, self).__init__(*args, **kwargs)
+
+
+class Sequential(nn.Sequential):
+    def __init__(self, *args):
+        super(Sequential, self).__init__(*args)

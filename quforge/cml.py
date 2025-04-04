@@ -2,6 +2,11 @@ import torch
 import torch.nn as nn
 
 
+class Linear(nn.Linear):
+    def __init__(self, in_features, out_features, bias=True):
+        super(Linear, self).__init__(in_features, out_features, bias)
+
+
 class ReLU(nn.ReLU):
     def __init__(self):
         super(ReLU, self).__init__()
@@ -42,3 +47,7 @@ class Softmax(nn.Softmax):
 
     def forward(self, x):
         return torch.softmax(x, dim=self.dim)
+
+
+def randn(shape, device='cpu', dtype=torch.float32):
+    return torch.randn(shape, device=device, dtype=dtype)

@@ -7,9 +7,10 @@ QuForge is a Python library for simulating qudit systems. This documentation cov
    :maxdepth: 2
    :caption: Contents:
 
-   gates
-   circuit
-   examples
+   "Installation" <installation>
+   "What is a Qudit?" <qudit>
+   "The gates module" <gates>
+   "The circuit module" <circuit>
 
 Indices and tables
 ==================
