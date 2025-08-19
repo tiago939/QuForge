@@ -5,6 +5,9 @@ QuForge is a Python-based quantum simulator designed for qudits, extending quant
 
 For detailed documentation, visit [quforge.readthedocs.io](https://quforge.readthedocs.io).
 
+Good news :tada:
+Our paper was accepted in the Computer Physics Communications journal [QuForge](https://www.sciencedirect.com/science/article/pii/S0010465525001894)
+
 # Installation
 
 Install QuForge using pip:
@@ -76,6 +79,14 @@ QuForge/
 └── setup.py                # Installation script for the QuForge package
 ```
 
+# Planned features
+
+- [] Improvements of statevector computation
+- [] Add noise channels
+- [] Improvements on sparsity support
+- [] Add support for cuQuantum backend
+
+
 # Contributions and Support
 
 We are continuously working on optimizing the library. Please reach out if you have any suggestions or questions!
@@ -87,13 +98,15 @@ If you use QuForge in your research, please cite our work:
 
 ```
 @misc{2024quforge,
-      title={QuForge: A Library for Qudits Simulation},
-      author={Tiago de Souza Farias and Lucas Friedrich and Jonas Maziero},
-      year={2024},
-      eprint={2409.17716},
-      archivePrefix={arXiv},
-      primaryClass={quant-ph},
-      url={https://arxiv.org/abs/2409.17716},
+      title = {QuForge: A library for qudits simulation},
+      journal = {Computer Physics Communications},
+      volume = {314},
+      pages = {109687},
+      year = {2025},
+      issn = {0010-4655},
+      doi = {https://doi.org/10.1016/j.cpc.2025.109687},
+      url = {https://www.sciencedirect.com/science/article/pii/S0010465525001894},
+      author = {Tiago {de Souza Farias} and Lucas Friedrich and Jonas Maziero}
 }
 ```
 
