@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.abspath(".."))
 project = "QuForge"
 copyright = "2024, Tiago de Souza Farias, Lucas Friedrich, Jonas Maziero"
 author = "Tiago de Souza Farias, Lucas Friedrich, Jonas Maziero"
-release = "0.3.4"
+release = "0.3.6"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

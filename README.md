@@ -1,6 +1,6 @@
 ![QuForge Logo](https://github.com/tiago939/QuForge/blob/main/logo.png)
 
-# QuForge v0.3.5
+# QuForge v0.3.6
 QuForge is a Python-based quantum simulator designed for qudits, extending quantum computing capabilities beyond traditional qubits. It facilitates the simulation of quantum circuits with customizable qudit dimensions, supporting both dense and sparse operations for efficient computation. Built on the differentiable framework PyTorch, QuForge enables execution on accelerating devices such as GPUs and TPUs, enhancing simulation speed.
 
 For detailed documentation, visit [quforge.readthedocs.io](https://quforge.readthedocs.io).
@@ -81,7 +81,7 @@ QuForge/
 
 # Planned features
 
-- [] Improvements of statevector computation
+- [x] Improvements of statevector computation
 - [] Add noise channels
 - [] Improvements on sparsity support
 - [] Add support for cuQuantum backend
