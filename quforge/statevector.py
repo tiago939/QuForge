@@ -5,93 +5,75 @@ import math
 import numpy as np
 import sympy as sp
 import torch
+from math import prod
 
-
-def State(dits, dim=2, device="cpu"):
+def State(dits: str, dim=2, device="cpu", sparse: bool = False) -> torch.Tensor:
     """
-    Constructs a pure state vector for a system of qudits based on a string input.
+    Constructs a pure state vector for a system of qudits based on a string input, with optional sparse representation.
 
-    Parameters:
-        dits : str
-            A string representing the state indices for each qudit.
-            Consecutive digits represent the index for a qudit, and non-digit characters (e.g., '-')
-            serve as delimiters between qudits.
-            For example, '0-2' represents a state |02⟩ (first qudit in state 0, second qudit in state 2).
-        dim : int or list of int, optional
-            The dimension(s) of the individual qudits.
-            If an integer is provided, all qudits are assumed to have the same dimension.
-            If a list is provided, each element corresponds to the dimension of the respective qudit.
-            The length of the list must equal the number of qudits extracted from `dits`.
-            Default is 2 (qubit) if an integer.
-        device : str, optional
-            The device on which the tensors will be created (e.g., 'cpu' or 'cuda').
-            Default is 'cpu'.
+    Args:
+        dits (str):
+            A string of digits separated by non-digits (e.g., '-') indicating each qudit's index.
+            Example: '0-2-1' for a three-qudit state |0,2,1>.
+        dim (int or list of int):
+            Dimension(s) of the qudits. If int, all qudits have that dimension.
+            If list, length must match number of qudits.
+        device (str):
+            'cpu' or 'cuda'.
+        sparse (bool):
+            If True, returns a sparse COO tensor with only one nonzero entry.
 
     Returns:
-        state : torch.Tensor
-            A column vector (tensor of shape (N, 1)) representing the pure state constructed via
-            the Kronecker product of basis vectors corresponding to each qudit.
-            N is the product of the dimensions of the individual qudits.
-
-    Example:
-        >>> # For a two-qudit system with qubits (dimension 2), the input '0-1' corresponds to the state |01⟩.
-        >>> psi = State('0-1', dim=2)
-
-        >>> # For a two-qudit system where the first qudit is a qubit (dim=2) and the second is a qutrit (dim=3),
-        >>> # the input '0-2' corresponds to the state |02⟩.
-        >>> psi = State('0-2', dim=[2, 3])
-
+        torch.Tensor: A column vector of shape (N,1), where N = prod(dimensions).
+                     Sparse COO if requested, else a dense complex64 tensor.
     """
-    # Parse the input string to extract individual qudit indices.
+
+    # 1. Parse input string into list of qudit indices
     qudit_strs = []
     curr = ""
     for c in dits:
         if c.isdigit():
             curr += c
-        else:
-            if curr != "":
-                qudit_strs.append(curr)
-                curr = ""
-    if curr != "":
+        elif curr:
+            qudit_strs.append(curr);
+            curr = ""
+    if curr:
         qudit_strs.append(curr)
+    # convert to ints
+    indices = [int(s) for s in qudit_strs]
+    num_qudits = len(indices)
 
-    num_qudits = len(qudit_strs)
-
-    # Determine dimensions per qudit.
+    # 2. Determine dimensions per qudit
     if isinstance(dim, int):
         dims = [dim] * num_qudits
     else:
-        dims = dim
+        dims = list(dim)
         if len(dims) != num_qudits:
-            raise ValueError(
-                "Length of dim list must equal the number of qudits in the input."
-            )
+            raise ValueError("Length of dim list must equal the number of qudits in input.")
 
-    # Start with a trivial state (scalar 1) and build up via kron.
-    state = torch.eye(1, dtype=torch.complex64, device=device)
+    # 3. Compute linear index in the state vector
+    # strides[i] = product of dims[i+1:]
+    strides = [prod(dims[i+1:]) for i in range(num_qudits)] + [1]
+    # trim the last extra stride
+    strides = strides[:num_qudits]
+    lin_idx = sum(idx * stride for idx, stride in zip(indices, strides))
 
-    for i, s in enumerate(qudit_strs):
-        current_dim = dims[i]
-        # Check if the provided index is within the allowed range.
-        index = int(s)
-        if index >= current_dim:
-            raise ValueError(
-                f"State index {s} exceeds dimension {current_dim} for qudit {i}."
-            )
+    # 4. Total size
+    N = prod(dims)
 
-        # Create a basis tensor.
-        base = torch.zeros(
-            (current_dim, current_dim, 1), device=device, dtype=torch.complex64
+    # 5. Build state vector
+    if sparse:
+        # single nonzero at (lin_idx,0)
+        idx = torch.tensor([[lin_idx], [0]], device=device)
+        vals = torch.tensor([1.0], dtype=torch.complex64, device=device)
+        state = torch.sparse_coo_tensor(
+            idx, vals, (N, 1), dtype=torch.complex64, device=device
         )
-        for j in range(current_dim):
-            base[j, j, 0] = 1.0
-
-        # Select the vector corresponding to the state index (shape: (current_dim, 1)).
-        state_vector = base[index]
-        # Update the overall state via the Kronecker product.
-        state = torch.kron(state, state_vector)
-
-    return state
+        return state.coalesce()
+    else:
+        state = torch.zeros((N, 1), dtype=torch.complex64, device=device)
+        state[lin_idx, 0] = 1.0
+        return state
 
 
 def density_matrix(state, normalize=False):
@@ -363,96 +345,92 @@ def project(state, index=[0], dim=2):
     return new_state, L
 
 
-def exp_value(state, observable="Z", index=0, dim=2):
+def exp_value(state, observable="Z", index=0, dim=2, separate=False):
     """
     Computes the expectation value of an observable on a pure state.
     Supports multidimensional qudits by allowing a single integer or a list of dimensions.
 
     Parameters:
         state : torch.Tensor
-            A pure state vector (assumed to be a column vector of shape (N, 1) or a 1D tensor with N elements)
-            where N is the product of the dimensions of the individual qudits.
+            A pure state vector (shape (N,) or (N,1)), where N = prod(dimensions).
         observable : str, np.ndarray, or torch.Tensor
-            If a string, currently supports 'Z', which corresponds to the generalized Z operator.
-            If an ndarray or tensor, it is interpreted as the matrix representation of the observable.
+            If a string, currently supports 'Z' for the generalized Z operator.
+            Otherwise, a matrix representation of the observable.
         index : int or list of int
-            The index (or indices) of the qudit(s) on which the observable acts.
-        dim : int or list of int, optional
-            The dimension(s) of the qudits. If an integer, all qudits are assumed to have that dimension.
-            If a list, its elements specify the dimension of each qudit (and the length of the list must
-            equal the total number of qudits).
+            The qudit(s) on which the observable acts.
+        dim : int or list of int
+            Dimension(s) of the qudits.
+        separate : bool, optional
+            If False (default), returns the expectation on the *specified* indices
+            (or all combined if index is a list). If True, ignores `index` and returns
+            a list of expectation values for each individual wire.
 
     Returns:
-        output : torch.Tensor
-            The expectation value of the observable on the state, i.e. <state|O|state>.
+        torch.Tensor or list of torch.Tensor
     """
-    # Ensure that index is a list.
+    # Determine dimensions list and number of wires
+    if isinstance(dim, int):
+        wires = int(round(np.log(state.numel()) / np.log(dim)))
+        dims_list = [dim] * wires
+    else:
+        dims_list = list(dim)
+        wires = len(dims_list)
+
+    # Quick sanity check
+    if np.prod(dims_list) != state.numel():
+        raise ValueError(
+            "Product of dims_list must equal state dimension."
+        )
+
+    # If requested, compute each wire separately
+    if separate:
+        # For each wire i, compute ⟨ψ| Z_i ⊗ I ⊗ … |ψ⟩
+        return [
+            exp_value(state, observable=observable, index=i, dim=dims_list, separate=False)
+            for i in range(wires)
+        ]
+
+    # Normalize index argument to a sorted list
     if isinstance(index, int):
         indices = [index]
     else:
         indices = sorted(index)
 
-    # Determine the total number of qudits and their dimensions.
-    if isinstance(dim, int):
-        # Total wires can be inferred from state size.
-        wires = int(round(np.log(state.shape[0]) / np.log(dim)))
-        dims_list = [dim] * wires
-    else:
-        dims_list = dim
-        wires = len(dims_list)
-
-    total_dim = np.prod(dims_list)
-    if total_dim != state.shape[0]:
-        raise ValueError(
-            "The product of the individual qudit dimensions must equal the state dimension."
-        )
-
-    # Helper: generalized Z operator for a given dimension.
+    # Helper: generalized Z operator
     def generalized_Z(d):
-        omega = np.exp(2 * np.pi * 1j / d)
-        diag = [omega**j for j in range(d)]
+        ω = np.exp(2j * np.pi / d)
+        diag = [ω**k for k in range(d)]
         return torch.diag(torch.tensor(diag, dtype=torch.complex64))
 
-    # Construct the operator to act on the measured qudits.
-    # op_measured will be a dictionary mapping qudit index to its observable operator.
+    # Build a map of {wire: operator}
     op_measured = {}
     if isinstance(observable, str):
-        if observable == "Z":
-            for i in indices:
-                d = dims_list[i]
-                op_measured[i] = generalized_Z(d).to(state.device)
-        else:
-            raise ValueError(f"Observable string '{observable}' not recognized.")
-    elif isinstance(observable, np.ndarray):
-        M = torch.tensor(observable, dtype=torch.complex64, device=state.device)
+        if observable != "Z":
+            raise ValueError(f"Unknown observable '{observable}'")
         for i in indices:
-            op_measured[i] = M
+            d = dims_list[i]
+            op_measured[i] = generalized_Z(d).to(state.device)
     else:
-        M = observable.to(state.device)
+        M = (
+            torch.tensor(observable, dtype=torch.complex64, device=state.device)
+            if isinstance(observable, np.ndarray)
+            else observable.to(state.device)
+        )
         for i in indices:
             op_measured[i] = M
 
-    # Build the full operator acting on the entire Hilbert space.
-    # For each qudit (wire), if its index is in 'indices', use the specified observable;
-    # otherwise, use the identity.
-    full_operator = torch.eye(1, dtype=torch.complex64, device=state.device)
-    for i in range(wires):
-        if i in indices:
-            full_operator = torch.kron(full_operator, op_measured[i])
-        else:
-            full_operator = torch.kron(
-                full_operator,
-                torch.eye(dims_list[i], dtype=torch.complex64, device=state.device),
-            )
+    # Build the full operator via tensor products
+    full_op = torch.eye(1, dtype=torch.complex64, device=state.device)
+    for wire in range(wires):
+        op = op_measured.get(wire, torch.eye(dims_list[wire], dtype=torch.complex64, device=state.device))
+        full_op = torch.kron(full_op, op)
 
-    # Ensure state is a column vector.
-    if state.ndim == 1:
-        state = state.unsqueeze(1)
+    # Ensure column-vector shape
+    ψ = state.unsqueeze(1) if state.ndim == 1 else state
 
-    # Compute the expectation value <state| full_operator |state>.
-    output = torch.matmul(state.conj().T, torch.matmul(full_operator, state))
-
-    return output[0, 0]
+    # ⟨ψ| full_op |ψ⟩
+    val = ψ.conj().transpose(-2, -1) @ (full_op @ ψ)
+    return val.squeeze()
 
 
 def show(

@@ -1,19 +1,18 @@
 from math import log as log
 import cmath
-import itertools
+from itertools import product
 import numpy as np
 import quforge.aux as aux
 import torch
 import torch.nn as nn
 from typing import List, Tuple
-from itertools import product
 
 
 class H(nn.Module):
     r"""
-    Memory‑efficient Generalized Hadamard gate for qudits via local tensordot applications.
+    Generalized Hadamard gate for qudits via local tensordot applications.
 
-    Applies the D×D Hadamard transform on each target qudit axis without building the full 2^N×2^N matrix.
+    Applies the D \times D Hadamard transform on each target qudit axis without building the full 2^N \times 2^N matrix.
 
     **Arguments:**
         dim (int or list[int]): Qudit dimension(s); if int, use `wires` copies.
@@ -121,8 +120,7 @@ class H(nn.Module):
 
 class X(nn.Module):
     r"""
-    Generalized Pauli-X (X) Gate for qudits, memory‐efficient application via state‐tensor rolls,
-    with optional sparse small‐matrix construction for explicit unitary retrieval.
+    Generalized Pauli-X (X) Gate for qudits.
 
     **Arguments:**
         s (int): cyclic shift per target qudit (positive for forward, negative for inverse)
@@ -131,7 +129,7 @@ class X(nn.Module):
         index (list[int]): target wires on which to apply the shift.
         device (str): 'cpu' or 'cuda'.
         inverse (bool): apply negative shift when True.
-        sparse (bool): if True, small per‐wire matrices are stored sparsely for `matrix()` calls.
+        sparse (bool): if True, small per-wire matrices are stored sparsely for `matrix()` calls.
     """
     def __init__(
         self,
@@ -182,7 +180,6 @@ class X(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Apply X by rolling the state tensor along each target qudit dimension.
-        Memory scales O(prod(dim_list)).
         """
         # ensure dense for reshape
         if x.is_sparse:
@@ -194,7 +191,7 @@ class X(nn.Module):
 
     def matrix(self) -> torch.Tensor:
         """
-        (Optional) Construct the full unitary via small‐matrix Kron.
+        Construct the full unitary via small-matrix Kron.
         Only for small wire counts. Returns sparse if requested.
         """
         # start with 1×1 identity
@@ -219,12 +216,12 @@ class X(nn.Module):
 
 class Z(nn.Module):
     r"""
-    Memory‑efficient Generalized Pauli‑Z gate for qudits with optional sparse full‑unitary construction.
+    Generalized Pauli Z gate for qudits with optional sparse full-unitary construction.
 
     Applies phase shifts directly in forward and optionally builds a sparse or dense full unitary in matrix().
 
     **Arguments:**
-        dim (int or list[int]): If int, use `wires` copies; else list of per‑wire dims.
+        dim (int or list[int]): If int, use `wires` copies; else list of per-wire dims.
         wires (int): Number of qudits when `dim` is int.
         s (int): Phase shift multiplier. Default = 1.
         index (list[int]): Target qudit indices. Default = all qudits.
@@ -316,10 +313,7 @@ class Z(nn.Module):
 
 class Y(nn.Module):
     r"""
-    Memory‑efficient Generalized Pauli‑Y gate for qudits: Y = (1/i) Z·X = -i·Z·X via local operations.
-
-    Applies the Y rotation on each target qudit directly to the state tensor,
-    avoiding full 2^N×2^N matrix constructions.
+    Generalized Pauli Y gate for qudits: Y = (1/i) Z·X = -i·Z·X via local operations.
 
     **Arguments:**
         s (int): cyclic shift parameter for X; default=1.
@@ -398,7 +392,7 @@ class Y(nn.Module):
     def matrix(self) -> torch.Tensor:
         """
         (Optional) Construct full unitary for small wire counts.
-        Uses Kron of local 2×2 Y blocks.
+        Uses Kron of local 2 \times 2 Y blocks.
         """
         U = torch.eye(1, dtype=torch.complex64, device=self.device)
         for i, d in enumerate(self.dim_list):
@@ -418,10 +412,10 @@ class Y(nn.Module):
 
 class RX(nn.Module):
     r"""
-    Memory-efficient Rotation-X (RX) gate for qudits via local tensordot applications.
+    Rotation-X (RX) gate for qudits.
 
-    Applies each 2×2 rotation block directly to the state tensor along the target axis,
-    avoiding any full 2^N×2^N matrix construction.
+    Applies each 2 \times 2 rotation block directly to the state tensor along the target axis,
+    avoiding any full 2^N \times 2^N matrix construction.
 
     **Arguments:**
         j (int or list[int]): First level indices for each target qudit.
@@ -479,7 +473,7 @@ class RX(nn.Module):
 
     def forward(self, x: torch.Tensor, param=None) -> torch.Tensor:
         """
-        Apply RX by reshaping to an N‑d state tensor and applying local rotations.
+        Apply RX by reshaping to an N-d state tensor and applying local rotations.
         """
         # get parameters
         p = self.angle if param is None else torch.tensor(param, device=self.device)
@@ -508,7 +502,7 @@ class RX(nn.Module):
 
     def matrix(self, param=None) -> torch.Tensor:
         """
-        (Optional) Construct full unitary via Kron of small blocks. Only for small wires.
+        Construct full unitary via Kron of small blocks. Only for small wires.
         """
         U = torch.eye(1, dtype=torch.complex64, device=self.device)
         # get parameters
@@ -530,10 +524,10 @@ class RX(nn.Module):
 
 class RY(nn.Module):
     r"""
-    Memory‑efficient Rotation‑Y (RY) gate for qudits via local tensordot applications.
+    Rotation-Y (RY) gate for qudits.
 
-    Applies a two‑level Y rotation on each target qudit directly to the state tensor,
-    avoiding any full 2^N×2^N matrix construction.
+    Applies a two-level Y rotation on each target qudit directly to the state tensor,
+    avoiding any full 2^N \times 2^N matrix construction.
 
     **Arguments:**
         j (int or list[int]): First level index for each target qudit (or common if int).
@@ -592,7 +586,7 @@ class RY(nn.Module):
 
     def forward(self, x: torch.Tensor, param=None) -> torch.Tensor:
         """
-        Apply RY by reshaping state to N‑d tensor and performing local 2×2 Y rotations per axis.
+        Apply RY by reshaping state to N-d tensor and performing local 2 \times 2 Y rotations per axis.
         """
         # ensure dense for view
         if x.is_sparse:
@@ -620,7 +614,7 @@ class RY(nn.Module):
 
     def matrix(self, param=None) -> torch.Tensor:
         """
-        (Optional) Fallback: build full unitary via Kron of small rotation blocks.
+        Build full unitary via Kron of small rotation blocks.
         Only suitable for small wire counts.
         """
         p = self.angle if param is None else torch.tensor(param, device=self.device)
@@ -642,9 +636,7 @@ class RY(nn.Module):
 
 class RZ(nn.Module):
     r"""
-    Memory‑efficient Rotation‑Z (RZ) gate for qudits via direct phase multiplications.
-
-    Applies a phase rotation on each target qudit axis without building the full 2^N×2^N matrix.
+    Rotation-Z (RZ) gate for qudits via direct phase multiplications.
 
     **Arguments:**
         j (int or list[int]): Level(s) to rotate (or common if int).
@@ -765,8 +757,7 @@ class RZ(nn.Module):
 
 class CNOT(nn.Module):
     r"""
-    Memory‑efficient Controlled-NOT (CNOT) gate for qudits via conditional rolls,
-    with optional sparse full‑unitary fallback.
+    Controlled-NOT (CNOT) gate for qudits via conditional rolls.
 
     **Arguments:**
         index (list[int]): [control_axis, target_axis].
@@ -804,7 +795,7 @@ class CNOT(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Apply CNOT by reshaping state to an N‑D tensor and conditionally rolling the target axis
+        Apply CNOT by reshaping state to an N-D tensor and conditionally rolling the target axis
         by the control value for each slice.
         """
         # densify if sparse
@@ -867,8 +858,7 @@ class CNOT(nn.Module):
 
 class CZ(nn.Module):
     r"""
-    Memory‑efficient Controlled-Z (CZ) gate for qudits via conditional phase broadcasts,
-    with optional sparse full‑unitary fallback.
+    Controlled-Z (CZ) gate for qudits.
 
     **Arguments:**
         index (list[int]): [control_axis, target_axis].
@@ -904,7 +894,7 @@ class CZ(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Apply CZ by reshaping to N‑D tensor and broadcasting a conditional phase to the target axis.
+        Apply CZ by reshaping to N-D tensor and broadcasting a conditional phase to the target axis.
         """
         if x.is_sparse:
             x = x.to_dense()
@@ -971,8 +961,7 @@ class CZ(nn.Module):
 
 class SWAP(nn.Module):
     r"""
-    Memory‑efficient SWAP gate for qudits via axis transpose,
-    with optional sparse full‑unitary fallback.
+    SWAP gate for qudits via axis transpose,
 
     Swaps the states of two qudits by transposing their axes in the state tensor.
 
@@ -1009,7 +998,7 @@ class SWAP(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Apply SWAP by reshaping to an N‑D tensor and transposing the two axes.
+        Apply SWAP by reshaping to an N-D tensor and transposing the two axes.
         """
         if x.is_sparse:
             x = x.to_dense()
@@ -1043,8 +1032,7 @@ class SWAP(nn.Module):
 
 class CRX(nn.Module):
     r"""
-    Memory-efficient Controlled-RX gate for qudits via conditional local rotations,
-    with optional sparse full-unitary fallback.
+    Controlled-RX gate for qudits via conditional local rotations.
 
     Applies an RX rotation on the target qudit conditioned on the control qudit's state:
     for control state c, applies RX(θ * c) between levels j,k on the target axis.
@@ -1127,7 +1115,7 @@ class CRX(nn.Module):
 
     def matrix(self) -> torch.Tensor:
         """
-        (Optional) Construct full CRX unitary via Kron of control-conditioned blocks.
+        Construct full CRX unitary via Kron of control-conditioned blocks.
         Returns sparse COO if `sparse=True`, else dense.
         """
         # full identity
@@ -1179,8 +1167,7 @@ class CRX(nn.Module):
 
 class CRY(nn.Module):
     r"""
-    Memory-efficient Controlled-RY gate for qudits via conditional local rotations,
-    with optional sparse full-unitary fallback.
+    Controlled-RY gate for qudits.
 
     Applies an RY rotation on the target qudit conditioned on the control qudit's state:
     for control state c, applies RY(θ * c) between levels j,k on the target axis.
@@ -1263,7 +1250,7 @@ class CRY(nn.Module):
 
     def matrix(self) -> torch.Tensor:
         """
-        (Optional) Construct full CRY unitary via Kron of control-conditioned blocks.
+        Construct full CRY unitary via Kron of control-conditioned blocks.
         Returns sparse COO if `sparse=True`, else dense.
         """
         # full identity
@@ -1311,8 +1298,7 @@ class CRY(nn.Module):
 
 class CRZ(nn.Module):
     r"""
-    Memory-efficient Controlled-RZ (CRZ) gate for qudits via conditional phase broadcasts,
-    with optional sparse full-unitary fallback.
+    Controlled-RZ (CRZ) gate for qudits.
 
     Applies a Z-phase rotation on the target qudit level `j`, conditioned on the control qudit's state.
     For control state c and learnable angle θ, target level j accumulates phase exp(i·c·θ).
@@ -1391,7 +1377,7 @@ class CRZ(nn.Module):
 
     def matrix(self) -> torch.Tensor:
         """
-        (Optional) Construct the full CRZ unitary. Returns sparse COO if `sparse=True`, else dense.
+        Construct the full CRZ unitary. Returns sparse COO if `sparse=True`, else dense.
         Only recommended for small systems.
         """
         dims = self.dim_list
@@ -1423,7 +1409,7 @@ class CRZ(nn.Module):
 
 class CCNOT(nn.Module):
     r"""
-    Memory-efficient CCNOT (Toffoli) gate for qudits via conditional target rolls,
+    CCNOT (Toffoli) gate for qudits via conditional target rolls,
     with optional sparse full-unitary fallback.
 
     For controls c1, c2 and target t: t -> (t + c1 * c2) mod d_t.
@@ -1497,7 +1483,7 @@ class CCNOT(nn.Module):
 
     def matrix(self) -> torch.Tensor:
         """
-        (Optional) Construct full CCNOT unitary. Returns sparse COO if `sparse=True`, else dense.
+        Construct full CCNOT unitary. Returns sparse COO if `sparse=True`, else dense.
         Only for small systems.
         """
         dims = self.dim_list
@@ -1530,7 +1516,7 @@ class CCNOT(nn.Module):
 
 class MCX(nn.Module):
     r"""
-    Memory-efficient Multi-Controlled-X (MCX) gate for qudits via conditional target rolls,
+    Multi-Controlled-X (MCX) gate for qudits via conditional target rolls,
     with optional sparse full-unitary fallback.
 
     For controls c1,...,c_{n-1} and target t: t -> (t + c1*c2*...*c_{n-1}) mod d_t.
@@ -1641,12 +1627,12 @@ class MCX(nn.Module):
 
 class U(nn.Module):
     r"""
-    Memory‑efficient Custom/Random Unitary Gate for qudits with optional sparse embedding.
+    Custom/Random Unitary Gate for qudits with optional sparse embedding.
 
     Applies either a provided matrix or a learnable random unitary on the full system or a subspace.
 
     **Arguments:**
-        matrix (Tensor or None): User‑supplied unitary (square) on full or subspace; if None, parameterize random.
+        matrix (Tensor or None): User-supplied unitary (square) on full or subspace; if None, parameterize random.
         dim (int or list[int]): Qudit dimensions; if int, repeated wires times.
         wires (int): Number of qudits when dim is int.
         device (str): 'cpu' or 'cuda'.
@@ -1777,7 +1763,7 @@ class U(nn.Module):
 
 class CU(nn.Module):
     r"""
-    Memory‑efficient Controlled‑Unitary (CU) gate for qudits via conditional slice‑wise application.
+    Controlled-Unitary (CU) gate for qudits via conditional slice-wise application.
 
     Applies different unitary blocks on a target subspace depending on a control qudit's value:
     CU = \sum_{k=0}^{d_c-1} |k><k| \otimes U_k, with identity for inactive control states.
@@ -1876,7 +1862,7 @@ class CU(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Apply CU by converting any sparse input to dense, then slice‑wise applying each U_k.
+        Apply CU by converting any sparse input to dense, then slice-wise applying each U_k.
         """
         # ensure dense
         x = x.to_dense() if not isinstance(x, torch.Tensor) or x.is_sparse or x.layout != torch.strided else x
@@ -1960,9 +1946,9 @@ class CU(nn.Module):
 
 class RXX(nn.Module):
     r"""
-    Memory‑efficient RXX gate for qudits: exp(-i * phi * X_i X_j / 2) via local tensordot.
+    RXX gate for qudits: exp(-i * phi * X_i X_j / 2) via local tensordot.
 
-    Applies the two‑qudit rotation directly on the state tensor, avoiding full 2^N×2^N unitaries.
+    Applies the two-qudit rotation directly on the state tensor, avoiding full 2^N \times 2^N unitaries.
 
     **Arguments:**
         index (list[int]): Two target qudit axes, e.g. [i, j].
@@ -1980,6 +1966,7 @@ class RXX(nn.Module):
         device='cpu',
         angle=None,
         sparse=False,
+        requires_grad=True
     ):
         super().__init__()
         if not (isinstance(index, (list, tuple)) and len(index)==2):
@@ -1995,11 +1982,19 @@ class RXX(nn.Module):
             self.dim_list = list(dim)
             wires = len(self.dim_list)
         self.wires = wires
+
         # angle parameter
-        if angle is None:
-            self.phi = nn.Parameter(torch.randn(1, device=device))
+        if requires_grad:
+            if angle is None:
+                self.phi = nn.Parameter(torch.randn(1, device=device))
+            else:
+                self.phi = nn.Parameter(torch.tensor([angle], device=device))
         else:
-            self.phi = nn.Parameter(torch.tensor([angle], device=device))
+            if angle is None:
+                self.phi = torch.randn(1, device=device)
+            else:
+                self.phi = torch.tensor([angle], device=device)
+
         # precompute local X generators for each axis
         d_i = self.dim_list[self.i]
         d_j = self.dim_list[self.j]
@@ -2013,7 +2008,7 @@ class RXX(nn.Module):
 
     def forward(self, x: torch.Tensor, param=None) -> torch.Tensor:
         """
-        Apply RXX: reshape to N‑d tensor, compute ψ_flip = X_i X_j |ψ〉, then
+        Apply RXX: reshape to N-d tensor, compute ψ_flip = X_i X_j |ψ〉, then
         |ψ'〉 = cos(φ/2) ψ + (-i sin(φ/2)) ψ_flip.
         """
         if x.is_sparse:
@@ -2036,22 +2031,12 @@ class RXX(nn.Module):
         return out.reshape(-1,1)
 
     def matrix(self, param=None) -> torch.Tensor:
-        """
-        (Optional) Build full unitary for small wire counts.
-        """
-        phi = (self.phi if param is None else torch.tensor(param,device=self.device))[0]
-        c = torch.cos(phi/2); s = -1j*torch.sin(phi/2)
-        # full X_i X_j via small kron
-        U_local = aux.kron(self.M_i, self.M_j, sparse=False)
-        # identity on other wires via aux.eye
-        # build full full plugin, etc...
-        # fallback to existing method if needed
         raise NotImplementedError("Full matrix construction not supported in fallback.")
 
 
 class RYY(nn.Module):
     r"""
-    Memory‑efficient RYY gate for qudits: exp(-i * phi * Y_i Y_j / 2) via local tensordot.
+    RYY gate for qudits: exp(-i * phi * Y_i Y_j / 2) via local tensordot.
 
     **Arguments:**
       index (list[int]): Two target qudit axes [i, j].
@@ -2059,7 +2044,7 @@ class RYY(nn.Module):
       wires (int): Number of qudits when `dim` is int.
       device (str): 'cpu' or 'cuda'.
       angle (float or Tensor or None): Rotation angle φ; random if None.
-      sparse (bool): if True, `matrix()` will return a sparse‑COO fallback.
+      sparse (bool): if True, `matrix()` will return a sparse-COO fallback.
     """
     def __init__(
         self,
@@ -2109,7 +2094,7 @@ class RYY(nn.Module):
     def forward(self, x: torch.Tensor, param=None) -> torch.Tensor:
         """
         Apply RYY:
-          |ψ'> = cos(φ/2)|ψ> + (−i sin(φ/2)) Y_i Y_j |ψ>
+          |ψ'> = cos(φ/2)|ψ> + (-i sin(φ/2)) Y_i Y_j |ψ>
         all done by tensordot + permutes on a dense state.
         """
         if x.is_sparse:
@@ -2136,30 +2121,14 @@ class RYY(nn.Module):
         return out.reshape(-1, 1)
 
     def matrix(self, param=None) -> torch.Tensor:
-        """
-        (Optional fallback) Build the full RYY unitary for small N.
-        Returns a sparse‑COO tensor if `self.sparse=True`, else dense.
-        """
-        phi = (self.phi if param is None else torch.tensor(param, device=self.device))[0]
-        c = torch.cos(phi / 2)
-        s = -1j * torch.sin(phi / 2)
-
-        # Full local XX = Y_i ⊗ Y_j
-        YY = torch.kron(self.Y_i, self.Y_j)
-
-        # identity on other wires
-        U = YY * s + torch.eye(YY.shape[0], dtype=torch.complex64, device=self.device) * c
-        # then kron with identities for other qudits via aux.eye...
-        # (left as an exercise or use your existing kron-based fallback)
-
         raise NotImplementedError("Full matrix construction not implemented in this fallback.")
 
 
 class RZZ(nn.Module):
     r"""
-    Memory‑efficient RZZ gate for qudits: exp(-i * phi * Z_i Z_j / 2) via elementwise phases.
+    RZZ gate for qudits: exp(-i * phi * Z_i Z_j / 2) via elementwise phases.
 
-    Applies the two‑qudit rotation directly on the state tensor, avoiding full 2^N×2^N unitaries.
+    Applies the two-qudit rotation directly on the state tensor, avoiding full 2^N \times 2^N unitaries.
 
     **Arguments:**
         index (list[int]): Two target qudit axes [i, j].
@@ -2224,15 +2193,4 @@ class RZZ(nn.Module):
         return out.reshape(-1, 1)
 
     def matrix(self, param=None) -> torch.Tensor:
-        """
-        (Fallback) Full RZZ matrix for small systems, sparse if requested.
-        """
-        phi = (self.phi if param is None else torch.tensor(param, device=self.device))[0]
-        c = torch.cos(phi / 2)
-        s = -1j * torch.sin(phi / 2)
-        # local ZZ is diagonal via outer diag
-        ZZ = torch.ger(self.ph_i, self.ph_j).view(-1)
-        diag = c + s * ZZ
-        U = torch.diag(diag)
-        # embed via aux.kron for other wires...
         raise NotImplementedError("Full RZZ matrix construction not implemented.")

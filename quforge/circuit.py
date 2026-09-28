@@ -1,5 +1,12 @@
 import torch.nn as nn
 import quforge.gates as gates
+from quforge.trajectory import (
+    get_gate_targets,
+    apply_gate_batched,
+    apply_channel_batched,
+    noisy_measure,
+    trajectory_expectation,
+)
 
 
 class Circuit(nn.Module):
@@ -61,18 +68,24 @@ class Circuit(nn.Module):
         >>> print(result)
     """
 
-    def __init__(self, dim=2, wires=1, device="cpu", sparse=False):
+    def __init__(self, dim=2, wires=1, device="cpu", sparse=False,
+                 noise_model=None, n_trajectories=1, use_vmap=True):
         super(Circuit, self).__init__()
         # Process dimensions: if dim is a list, use its length as wires.
         if isinstance(dim, int):
             self.dim = dim
             self.wires = wires
+            self._dim_list = [dim] * wires
         else:
             self.dim = dim
             self.wires = len(dim)
+            self._dim_list = list(dim)
         self.device = device
         self.circuit = nn.Sequential()
         self.sparse = sparse
+        self.noise_model = noise_model
+        self.n_trajectories = n_trajectories
+        self.use_vmap = use_vmap
 
     def add(self, module, **kwargs):
         """
@@ -223,6 +236,16 @@ class Circuit(nn.Module):
             gates.U(dim=self.dim, wires=self.wires, device=self.device, **kwargs)
         )
 
+    def LowRankU(self, **kwargs):
+            self.add_gate(
+                gates.LowRankU(dim=self.dim, wires=self.wires, device=self.device, **kwargs)
+            )
+
+    def RankU(self, **kwargs):
+                self.add_gate(
+                    gates.RankU(dim=self.dim, wires=self.wires, device=self.device, **kwargs)
+                )
+
     def CU(self, **kwargs):
         self.add_gate(
             gates.CU(dim=self.dim, wires=self.wires, device=self.device, **kwargs)
@@ -261,15 +284,56 @@ class Circuit(nn.Module):
             )
         )
 
+    def W(self, **kwargs):
+        self.add_gate(
+            gates.W(
+                dim=self.dim,
+                wires=self.wires,
+                device=self.device,
+                sparse=self.sparse,
+                **kwargs
+            )
+        )
+
     def forward(self, x):
         """
         Apply the circuit to the input qudit state.
 
+        When ``noise_model`` is ``None`` the original noiseless path is
+        used.
+
+        Otherwise the state is expanded into a batch of trajectories and
+        stochastic Kraus operators are applied after each gate according
+        to the noise model.
+
         Args:
-            x (torch.Tensor): The input qudit state (a column vector) whose dimension equals the product
-                              of the individual qudit dimensions.
+            x (torch.Tensor): The input qudit state, shape ``(D, 1)``.
 
         Returns:
-            torch.Tensor: The resulting state after applying the circuit.
+            torch.Tensor:
+                * Noiseless: ``(D, 1)`` — the final state.
+                * Noisy: ``(n_trajectories, D, 1)`` — one state per
+                  trajectory.  Use ``trajectory_expectation`` or
+                  ``noisy_measure`` to extract observables.
         """
-        return self.circuit(x)
+        # ---- original noiseless path ----
+        if self.noise_model is None:
+            return self.circuit(x)
+
+        # ---- noisy trajectory path ----
+        n_traj = max(self.n_trajectories, 1)
+        psi = x.unsqueeze(0).expand(n_traj, -1, -1).clone()
+
+        for gate in self.circuit:
+            # apply gate across trajectories
+            psi = apply_gate_batched(gate, psi, use_vmap=self.use_vmap)
+
+            # look up noise channels for this gate
+            gate_name = type(gate).__name__
+            target_qudits = get_gate_targets(gate)
+            errors = self.noise_model.get_errors(gate_name, target_qudits)
+
+            for channel in errors:
+                psi = apply_channel_batched(psi, channel, target_qudits, self._dim_list)
+
+        return psi

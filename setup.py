@@ -1,3 +1,3 @@
 from setuptools import setup
 
-setup(version="0.3.6")
+setup(version="0.4.0")

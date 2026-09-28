@@ -185,6 +185,8 @@ def eye(dim, device="cpu", sparse=False):
     else:
         M = torch.eye(dim, dtype=torch.complex64, device=device)
 
+    if sparse:
+        M = M.coalesce()
     return M
 
 
@@ -222,9 +224,7 @@ def cnot_qudits_Position(c, t, n, d, device="cpu"):
     else:
         dims = d
         if len(dims) != n:
-            raise ValueError(
-                "Length of dimension list must equal the number of qudits (n)."
-            )
+            raise ValueError("Length of dimension list must equal the number of qudits (n).")
 
     # Build the computational basis for n qudits.
     # Create a list of 1D tensors for each qudit's possible values.
@@ -275,16 +275,14 @@ def CNOT_sparse(c, t, d, n, device="cpu"):
     else:
         dims = d
         if len(dims) != n:
-            raise ValueError(
-                "Length of dimension list must equal the number of qudits (n)."
-            )
+            raise ValueError("Length of dimension list must equal the number of qudits (n).")
+        
     # Total Hilbert space dimension: product of all individual dimensions.
     D = int(np.prod(dims))
     indices = cnot_qudits_Position(c, t, n, dims, device=device)
     values = torch.ones(D, device=device)
-    eye_sparse = torch.sparse_coo_tensor(
-        indices.t(), values, (D, D), dtype=torch.complex64, device=device
-    )
+    eye_sparse = torch.sparse_coo_tensor(indices.t(), values, (D, D), dtype=torch.complex64, device=device)
+
     return eye_sparse
 
 
@@ -318,13 +316,11 @@ def sparse_index_put(M, indices, values, device):
     # Keep only the latest occurrences of each index (i.e., remove duplicates)
     unique, inverse = torch.unique(flat_indices, return_inverse=True, sorted=False)
     last_occurrences = torch.zeros_like(unique, dtype=torch.long)
-    last_occurrences[inverse] = torch.arange(
-        len(flat_indices), device=device
-    )  # Stores last occurrence index
+    last_occurrences[inverse] = torch.arange(len(flat_indices), device=device)  # Stores last occurrence index
 
     # Gather the latest indices and values
     new_indices = all_indices[:, last_occurrences]
     new_values = all_values[last_occurrences]
 
     # Create the updated sparse tensor
-    return torch.sparse_coo_tensor(new_indices, new_values, M.shape, device=device)
+    return torch.sparse_coo_tensor(new_indices, new_values, M.shape, device=device).coalesce()
